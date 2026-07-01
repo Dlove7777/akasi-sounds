@@ -1,9 +1,13 @@
 name: Release
 
-# Push a tag like v0.1.0 to build installers and attach them to a GitHub Release.
-# Builds are UNSIGNED (macOS will show a Gatekeeper warning). To ship signed
-# builds, add APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / CSC_LINK secrets and
-# electron-builder will pick them up automatically.
+# Push a tag like v0.1.0 to build installers and attach them to ONE GitHub Release.
+# Two stages: each OS builds and uploads its installer as a workflow artifact, then a
+# single publish job gathers them all and creates one release. (Publishing from each
+# matrix job in parallel races and produces duplicate draft releases.)
+#
+# Builds are UNSIGNED (macOS shows a Gatekeeper warning → right-click Open). To ship
+# signed builds add APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / CSC_LINK secrets and
+# electron-builder picks them up automatically.
 
 on:
   push:
@@ -25,7 +29,28 @@ jobs:
           node-version: 20
       - run: npm install
       - run: npm run build:renderer
-      - name: Build installer
-        run: npx electron-builder --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build installer (no publish)
+        run: npx electron-builder --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.os }}
+          path: |
+            dist-app/*.dmg
+            dist-app/*.exe
+            dist-app/*.AppImage
+          if-no-files-found: ignore
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          fail_on_unmatched_files: false
+          generate_release_notes: true
