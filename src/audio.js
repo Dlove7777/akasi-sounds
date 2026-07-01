@@ -18,17 +18,31 @@ function probe(input) {
   return new Promise((resolve) => {
     execFile(
       FFPROBE,
-      ['-v', 'error', '-show_entries', 'format=duration:stream=sample_rate,channels',
+      ['-v', 'error', '-show_entries', 'format=duration:format_tags:stream=sample_rate,channels',
        '-of', 'json', input],
       (err, stdout) => {
         if (err) return resolve({});
         try {
           const j = JSON.parse(stdout);
           const stream = (j.streams || [])[0] || {};
+          const t = {};
+          for (const [k, v] of Object.entries(j.format?.tags || {})) t[k.toLowerCase()] = v;
+          const num = (v) => {
+            const n = parseFloat(v);
+            return Number.isFinite(n) ? n : null;
+          };
           resolve({
             duration: j.format?.duration ? Number(j.format.duration) : null,
             samplerate: stream.sample_rate ? Number(stream.sample_rate) : null,
             channels: stream.channels ?? null,
+            tags: {
+              title: t.title || null,
+              artist: t.artist || t.album_artist || null,
+              album: t.album || null,
+              genre: t.genre || null,
+              bpm: num(t.tbpm || t.bpm),
+              year: num(t.date || t.year) != null ? Math.trunc(num(t.date || t.year)) : null,
+            },
           });
         } catch {
           resolve({});

@@ -7,7 +7,7 @@ import React, { useEffect, useRef, useState } from 'react';
  *   gets rendered on drag-out. Space = play/pause, click = seek.
  * - Fade in/out are numeric (seconds) and baked in by ffmpeg at render time.
  */
-export default function Waveform({ sound, fades, onFadesChange }) {
+export default function Waveform({ sound, cueToken, fades, onFadesChange }) {
   const canvasRef = useRef(null);
   const audioRef = useRef(null);
   const [peaks, setPeaks] = useState(null);
@@ -17,6 +17,10 @@ export default function Waveform({ sound, fades, onFadesChange }) {
   const [sel, setSel] = useState(null); // {start,end} seconds
   const [src, setSrc] = useState('');
   const dragRef = useRef(null);
+  const wantPlayRef = useRef(false);
+
+  // A new cue (arrow-key or click audition) requests auto-play once the file loads.
+  useEffect(() => { if (cueToken) wantPlayRef.current = true; }, [cueToken]);
 
   // Resolve + decode when the sound changes.
   useEffect(() => {
@@ -36,7 +40,7 @@ export default function Waveform({ sound, fades, onFadesChange }) {
         setDuration(audio.duration);
         setPeaks(computePeaks(audio, 900));
         ctx.close();
-      } catch { /* keep transport working even if decode fails */ }
+      } catch { setDuration(sound.duration || 0); /* transport still works if decode fails */ }
     })();
     return () => { cancelled = true; };
   }, [sound?.id]);
@@ -55,7 +59,15 @@ export default function Waveform({ sound, fades, onFadesChange }) {
   function toggle() {
     const a = audioRef.current;
     if (!a) return;
-    if (a.paused) { a.play(); setPlaying(true); } else { a.pause(); setPlaying(false); }
+    if (a.paused) { a.play().catch(() => {}); setPlaying(true); } else { a.pause(); setPlaying(false); }
+  }
+
+  // Auto-play when a cue asked for it and the audio is ready.
+  function onCanPlay() {
+    if (!wantPlayRef.current) return;
+    wantPlayRef.current = false;
+    const a = audioRef.current;
+    if (a) a.play().then(() => setPlaying(true)).catch(() => {});
   }
 
   function xToTime(e) {
@@ -91,6 +103,7 @@ export default function Waveform({ sound, fades, onFadesChange }) {
   return (
     <div className="wf">
       <audio ref={audioRef} src={src} onTimeUpdate={(e) => setPos(e.target.currentTime)}
+             onCanPlay={onCanPlay}
              onEnded={() => setPlaying(false)} onLoadedMetadata={(e) => setDuration(e.target.duration || duration)} />
       <button className={`wf-play ${playing ? 'on' : ''}`} onClick={toggle} title="Play / pause (Space)">
         {playing ? '❚❚' : '▶'}

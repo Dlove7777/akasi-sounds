@@ -1,149 +1,198 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import Sidebar from './components/Sidebar.jsx';
+import ResultsList from './components/ResultsList.jsx';
 import Waveform from './components/Waveform.jsx';
 
-const SCOPES = [
-  { id: 'library', label: 'Library', filter: {} },
-  { id: 'favorites', label: 'Favorites', filter: { favoritesOnly: true } },
-  { id: 'local', label: 'My Folders', filter: { source: 'local' } },
-];
+const AUDITION_DEBOUNCE = 120; // ms — avoid a fetch storm while arrow-scrubbing
 
 export default function App() {
   const [scope, setScope] = useState('library');
-  const [remoteMode, setRemoteMode] = useState(false); // searching Freesound instead of local index
+  const [activeCollectionId, setActiveCollectionId] = useState(null);
+  const [remoteMode, setRemoteMode] = useState(false); // provider id | false
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
-  const [selected, setSelected] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
+  const [auditionSound, setAuditionSound] = useState(null);
+  const [cueToken, setCueToken] = useState(0);
   const [fades, setFades] = useState({ fadeIn: 0, fadeOut: 0 });
-  const [stats, setStats] = useState({ total: 0, favorites: 0 });
+  const [stats, setStats] = useState({ total: 0, favorites: 0, music: 0 });
   const [providers, setProviders] = useState([]);
   const [folders, setFolders] = useState([]);
+  const [collections, setCollections] = useState([]);
   const [busy, setBusy] = useState(null);
   const isMock = window.akasi.__mock;
+  const auditionTimer = useRef(null);
+
+  const scopeOpts = useCallback(() => {
+    if (scope === 'favorites') return { favoritesOnly: true };
+    if (scope === 'music') return { kind: 'music' };
+    if (scope === 'collection' && activeCollectionId) return { collectionId: activeCollectionId };
+    return {};
+  }, [scope, activeCollectionId]);
 
   const refresh = useCallback(async () => {
-    if (remoteMode) return; // remote handled by its own effect
-    const scopeDef = SCOPES.find((s) => s.id === scope) || SCOPES[0];
-    setResults(await window.akasi.search(query, scopeDef.filter));
-  }, [scope, query, remoteMode]);
+    if (remoteMode) return;
+    setResults(await window.akasi.search(query, { ...scopeOpts(), limit: 2000 }));
+  }, [remoteMode, query, scopeOpts]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  const loadMeta = useCallback(async () => {
+    setStats(await window.akasi.stats());
+    setCollections(await window.akasi.listCollections());
+  }, []);
+
   useEffect(() => {
     (async () => {
-      setStats(await window.akasi.stats());
+      await loadMeta();
       setProviders(await window.akasi.providers());
       setFolders(await window.akasi.listFolders());
     })();
-    window.akasi.onDragError((msg) => setBusy(`Drag failed: ${msg}`));
+    window.akasi.onDragError?.((msg) => setBusy(`Drag failed: ${msg}`));
+  }, [loadMeta]);
+
+  // Debounced audition: selection highlights instantly; the player loads the sound
+  // that's still selected after the debounce, so holding an arrow key doesn't fetch
+  // every row it passes over.
+  const cue = useCallback((sound) => {
+    setSelectedId(sound.id);
+    if (auditionTimer.current) clearTimeout(auditionTimer.current);
+    auditionTimer.current = setTimeout(() => {
+      setAuditionSound(sound);
+      setFades({ fadeIn: 0, fadeOut: 0 });
+      setCueToken((t) => t + 1); // signal the player to auto-play
+    }, AUDITION_DEBOUNCE);
   }, []);
 
-  async function runRemote() {
-    if (!query.trim()) return;
-    setBusy('Searching Freesound…');
-    const r = await window.akasi.remoteSearch('freesound', query);
-    setBusy(null);
-    if (r.error) return setBusy(r.error);
-    setResults(r.results);
-    setStats(await window.akasi.stats());
+  // Keyboard-first navigation across the (possibly huge) result set.
+  useEffect(() => {
+    const onKey = (e) => {
+      const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || '');
+      if (typing) return;
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      if (!results.length) return;
+      e.preventDefault();
+      const idx = results.findIndex((r) => r.id === selectedId);
+      const next = e.key === 'ArrowDown'
+        ? Math.min(results.length - 1, idx < 0 ? 0 : idx + 1)
+        : Math.max(0, idx < 0 ? 0 : idx - 1);
+      cue(results[next]);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [results, selectedId, cue]);
+
+  async function runRemote(provider) {
+    if (!query.trim()) { setResults([]); return; }
+    setBusy(`Searching ${provider}…`);
+    const r = await window.akasi.remoteSearch(provider, query);
+    setBusy(r.error || null);
+    if (!r.error) { setResults(r.results); await loadMeta(); }
   }
 
-  async function onSearchKey(e) {
-    if (e.key === 'Enter' && remoteMode) runRemote();
-  }
+  function onScope(s) { setRemoteMode(false); setScope(s); setActiveCollectionId(null); }
+  function onCollection(id) { setRemoteMode(false); setScope('collection'); setActiveCollectionId(id); }
+  function onRemote(id) { setRemoteMode(id); setResults([]); }
+
+  function onSearchKey(e) { if (e.key === 'Enter' && remoteMode) runRemote(remoteMode); }
 
   async function addFolders() {
     setBusy('Scanning…');
-    window.akasi.onScanProgress((p) => setBusy(`Scanning ${p.done}/${p.total}`));
+    window.akasi.onScanProgress?.((p) => setBusy(`Scanning ${p.done}/${p.total}`));
     await window.akasi.addFolders();
     setBusy(null);
     setFolders(await window.akasi.listFolders());
-    setStats(await window.akasi.stats());
+    await loadMeta();
     refresh();
   }
 
-  async function fav(s, e) {
-    e.stopPropagation();
+  async function toggleFav(s) {
     await window.akasi.toggleFavorite(s.id);
     setResults((rs) => rs.map((r) => (r.id === s.id ? { ...r, favorite: r.favorite ? 0 : 1 } : r)));
+    loadMeta();
+    if (scope === 'favorites') refresh();
   }
+
+  async function createCollection(name) {
+    await window.akasi.createCollection(name);
+    setCollections(await window.akasi.listCollections());
+  }
+  async function deleteCollection(id) {
+    await window.akasi.deleteCollection(id);
+    if (activeCollectionId === id) onScope('library');
+    setCollections(await window.akasi.listCollections());
+  }
+  async function addToCollection(collectionId, s) {
+    await window.akasi.addToCollection(collectionId, s.id);
+    setCollections(await window.akasi.listCollections());
+    setBusy('Added to collection');
+    setTimeout(() => setBusy(null), 1200);
+  }
+
+  const musicColumns = scope === 'music';
+  const placeholder = remoteMode
+    ? `Search ${remoteMode} — press Enter…`
+    : scope === 'music' ? 'Search music…'
+    : scope === 'collection' ? 'Search this collection…'
+    : 'Search your library…';
 
   return (
     <div className="app">
-      <aside className="sidebar">
-        <div className="brand"><span className="brand-dot" />Akasi Sounds</div>
-
-        <div className="side-section">
-          {SCOPES.map((s) => (
-            <button key={s.id} className={`side-item ${!remoteMode && scope === s.id ? 'active' : ''}`}
-              onClick={() => { setRemoteMode(false); setScope(s.id); }}>{s.label}</button>
-          ))}
-        </div>
-
-        <div className="side-label">Online</div>
-        <div className="side-section">
-          {providers.length === 0 && <div className="side-hint">No provider key set</div>}
-          {providers.map((p) => (
-            <button key={p.id} className={`side-item ${remoteMode ? 'active' : ''}`}
-              onClick={() => { setRemoteMode(true); setResults([]); }}>{p.label}</button>
-          ))}
-        </div>
-
-        <div className="side-label">Folders</div>
-        <div className="side-section folders">
-          {folders.map((f) => (
-            <div key={f.path} className="folder" title={f.path}>{f.path.split('/').pop()}</div>
-          ))}
-          <button className="side-add" onClick={addFolders}>+ Add folder</button>
-        </div>
-
-        <div className="side-foot">
-          {stats.total.toLocaleString()} sounds · {stats.favorites} ★
-          {isMock && <div className="mock-badge">preview (mock data)</div>}
-        </div>
-      </aside>
+      <Sidebar
+        scope={scope}
+        activeCollectionId={activeCollectionId}
+        onScope={onScope}
+        onCollection={onCollection}
+        collections={collections}
+        onCreateCollection={createCollection}
+        onDeleteCollection={deleteCollection}
+        providers={providers}
+        remoteMode={remoteMode}
+        onRemote={onRemote}
+        folders={folders}
+        onAddFolders={addFolders}
+        stats={stats}
+        isMock={isMock}
+      />
 
       <main className="main">
         <div className="searchbar">
-          <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onSearchKey}
-            placeholder={remoteMode ? 'Search Freesound — press Enter…' : 'Search your library…'} />
-          {remoteMode && <button className="go" onClick={runRemote}>Search</button>}
+          <span className="search-ico">⌕</span>
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={onSearchKey}
+            placeholder={placeholder}
+          />
+          {remoteMode && <button className="go" onClick={() => runRemote(remoteMode)}>Search</button>}
+          <span className="count">{results.length ? `${results.length.toLocaleString()} results` : ''}</span>
           {busy && <span className="busy">{busy}</span>}
         </div>
 
-        <div className="results">
-          {results.length === 0 && (
-            <div className="empty">
-              {remoteMode ? 'Type a query and press Enter to pull from Freesound.' : 'Nothing here yet — add a folder or search Freesound.'}
-            </div>
-          )}
-          {results.map((s) => (
-            <div key={s.id} className={`row ${selected?.id === s.id ? 'sel' : ''}`}
-              onClick={() => { setSelected(s); setFades({ fadeIn: 0, fadeOut: 0 }); }}>
-              <button className={`star ${s.favorite ? 'on' : ''}`} onClick={(e) => fav(s, e)}>★</button>
-              <span className={`badge ${s.source}`}>{s.source === 'local' ? 'local' : s.source === 'freesound' ? 'free' : s.source}</span>
-              <span className="row-name">{s.name}</span>
-              <span className="row-tags">{(s.tags || '').split(/\s+/).slice(0, 4).join(' · ')}</span>
-              <span className="row-dur">{fmtDur(s.duration)}</span>
-              <span className="row-lic">{shortLicense(s.license)}</span>
-            </div>
-          ))}
-        </div>
+        {results.length === 0 ? (
+          <div className="empty">
+            {remoteMode
+              ? `Type a query and press Enter to pull from ${remoteMode}.`
+              : 'Nothing here — add a folder or search online.  ↑ / ↓ to audition · Space to play.'}
+          </div>
+        ) : (
+          <ResultsList
+            rows={results}
+            selectedId={selectedId}
+            resetKey={`${remoteMode}|${scope}|${activeCollectionId}|${query}`}
+            musicColumns={musicColumns}
+            collections={collections}
+            onSelect={cue}
+            onToggleFav={toggleFav}
+            onAddToCollection={addToCollection}
+          />
+        )}
 
         <div className="dock">
-          <Waveform sound={selected} fades={fades} onFadesChange={setFades} />
+          <Waveform sound={auditionSound} cueToken={cueToken} fades={fades} onFadesChange={setFades} />
         </div>
       </main>
     </div>
   );
-}
-
-const fmtDur = (s) => (s == null ? '' : s >= 60 ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : `${s.toFixed(1)}s`);
-function shortLicense(l) {
-  if (!l) return '';
-  if (l === 'local') return '';
-  if (/creativecommons|cc/i.test(l)) {
-    if (/zero|cc0|publicdomain/i.test(l)) return 'CC0';
-    const m = l.match(/licenses\/([a-z-]+)\//i);
-    return m ? `CC ${m[1].toUpperCase()}` : 'CC';
-  }
-  return l;
 }

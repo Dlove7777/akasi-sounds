@@ -54,17 +54,32 @@ async function scanFolder(db, root, onProgress) {
     } catch {
       /* unreadable — index name-only */
     }
+    const mt = meta.tags || {};
+    // A file is "music" if it carries music tags (artist/album/genre/bpm) or lives
+    // under a path segment that looks musical. Everything else indexes as sfx.
+    const rel = path.relative(root, file).toLowerCase();
+    const hasMusicTag = Boolean(mt.artist || mt.album || mt.genre || mt.bpm);
+    const musicPath = /(^|[\\/])(music|songs?|tracks?|beats?|score|underscore|beds?)([\\/]|$)/.test(rel);
+    const kind = hasMusicTag || musicPath ? 'music' : 'sfx';
+    // Fold artist/album/genre into the FTS tag text so they're searchable.
+    const extraTags = [mt.artist, mt.album, mt.genre].filter(Boolean).join(' ').toLowerCase();
     batch.push({
       source: 'local',
       source_id: file, // path is a stable id for local files
-      name: path.basename(file),
+      name: mt.title || path.basename(file),
       path: file,
       duration: meta.duration ?? null,
       samplerate: meta.samplerate ?? null,
       channels: meta.channels ?? null,
       filesize: meta.filesize ?? null,
       license: 'local',
-      tags: tagsFromPath(root, file),
+      tags: [tagsFromPath(root, file), extraTags].filter(Boolean).join(' '),
+      kind,
+      artist: mt.artist,
+      album: mt.album,
+      genre: mt.genre,
+      bpm: mt.bpm,
+      year: mt.year,
     });
     done += 1;
     if (onProgress) onProgress({ done, total: files.length, file });

@@ -57,6 +57,30 @@ const ok = (label, cond, extra = '') => {
   const tags = tagsFromPath('/lib', '/lib/footsteps/gravel/step_03.wav');
   ok('tagsFromPath derives folder+name tags', tags.includes('footsteps') && tags.includes('gravel') && tags.includes('step'), tags);
 
+  // 2b. Music kind + Music scope
+  db.upsertMany([
+    { source: 'local', source_id: '/m/bed.wav', name: 'Cinematic Bed.wav', kind: 'music', artist: 'Akasi Studio', genre: 'Cinematic', bpm: 90, tags: 'cinematic bed akasi studio' },
+  ]);
+  const music = db.search('', { kind: 'music' });
+  ok('Music scope returns music-kind rows', music.length === 1 && music[0].genre === 'Cinematic', `${music.length} row(s)`);
+  ok('Music metadata persisted (bpm/artist)', music[0].bpm === 90 && music[0].artist === 'Akasi Studio');
+  ok('Artist/genre searchable via FTS', db.search('cinematic').some((r) => r.kind === 'music'));
+  ok('Stats counts music', db.stats().music === 1);
+
+  // 2c. Collections
+  const colId = db.createCollection('Trailer Cut');
+  db.addToCollection(colId, thunder[0].id);
+  db.addToCollection(colId, music[0].id);
+  ok('Collection membership query', db.search('', { collectionId: colId }).length === 2);
+  ok('listCollections reports count', db.listCollections().find((c) => c.id === colId)?.count === 2);
+  db.removeFromCollection(colId, music[0].id);
+  ok('Remove from collection', db.search('', { collectionId: colId }).length === 1);
+  const colId2 = db.createCollection('Podcast Beds');
+  db.addToCollection(colId2, thunder[0].id);
+  ok('Sound in two collections', db.collectionsForSound(thunder[0].id).length === 2);
+  db.deleteCollection(colId);
+  ok('Delete collection cascades membership, keeps sound', db.listCollections().length === 1 && db.getSound(thunder[0].id) != null);
+
   // 3. Live Freesound search (network + key)
   let remote = null;
   if (freesound.available()) {

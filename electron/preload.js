@@ -12,6 +12,16 @@ contextBridge.exposeInMainWorld('akasi', {
   resolveAudio: (id) => ipcRenderer.invoke('audio:resolve', id),
   startDrag: (id, selection) => ipcRenderer.send('drag:start', { id, selection }),
   reveal: (p) => ipcRenderer.invoke('reveal', p),
+
+  // Collections
+  listCollections: () => ipcRenderer.invoke('col:list'),
+  createCollection: (name) => ipcRenderer.invoke('col:create', name),
+  renameCollection: (id, name) => ipcRenderer.invoke('col:rename', { id, name }),
+  deleteCollection: (id) => ipcRenderer.invoke('col:delete', id),
+  addToCollection: (collectionId, soundId) => ipcRenderer.invoke('col:add', { collectionId, soundId }),
+  removeFromCollection: (collectionId, soundId) => ipcRenderer.invoke('col:remove', { collectionId, soundId }),
+  collectionsForSound: (soundId) => ipcRenderer.invoke('col:forSound', soundId),
+
   onScanProgress: (cb) => ipcRenderer.on('scan:progress', (_e, d) => cb(d)),
   onDragError: (cb) => ipcRenderer.on('drag:error', (_e, d) => cb(d)),
 });

@@ -3,16 +3,17 @@
  * Akasi Sounds local index — SQLite (better-sqlite3) with FTS5 keyword search.
  *
  * One portable file holds the whole library index. Rows describe sounds from any
- * provider (local folder, Freesound, …); the actual audio lives at `path` (local)
- * or is streamed/cached from `url`. Semantic (CLAP) search lands in V2 as an extra
- * column + vector index — the schema below reserves `embedding` for it.
+ * provider (local folder, Freesound, generate, …); the audio lives at `path` (local)
+ * or is streamed/cached from `url`. Music metadata (artist/genre/bpm) is read from
+ * embedded tags at scan time. Semantic (CLAP) search lands later as the `embedding`
+ * column + a vector index. Collections group sounds many-to-many.
  */
 const Database = require('better-sqlite3');
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS sounds (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
-  source       TEXT NOT NULL,              -- 'local' | 'freesound' | ...
+  source       TEXT NOT NULL,              -- 'local' | 'freesound' | 'generate' | ...
   source_id    TEXT,                       -- provider's own id (for dedupe/refetch)
   name         TEXT NOT NULL,
   path         TEXT,                       -- local absolute path, if downloaded/local
@@ -24,20 +25,26 @@ CREATE TABLE IF NOT EXISTS sounds (
   filesize     INTEGER,
   license      TEXT,
   attribution  TEXT,                       -- required credit string, if any
-  tags         TEXT,                       -- space/comma separated
+  tags         TEXT,                       -- space/comma separated (incl. artist/genre for FTS)
+  kind         TEXT NOT NULL DEFAULT 'sfx',-- 'sfx' | 'music'
+  artist       TEXT,
+  album        TEXT,
+  genre        TEXT,
+  bpm          REAL,
+  year         INTEGER,
   favorite     INTEGER NOT NULL DEFAULT 0,
   use_count    INTEGER NOT NULL DEFAULT 0,
   last_used_at INTEGER,
   added_at     INTEGER NOT NULL,
-  embedding    BLOB,                       -- reserved: CLAP vector (V2)
+  embedding    BLOB,                       -- reserved: CLAP vector (semantic search)
   UNIQUE(source, source_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sounds_source   ON sounds(source);
 CREATE INDEX IF NOT EXISTS idx_sounds_favorite ON sounds(favorite);
 CREATE INDEX IF NOT EXISTS idx_sounds_added    ON sounds(added_at);
+CREATE INDEX IF NOT EXISTS idx_sounds_kind     ON sounds(kind);
 
--- FTS5 over the searchable text; kept in sync via triggers.
 CREATE VIRTUAL TABLE IF NOT EXISTS sounds_fts USING fts5(
   name, tags, content='sounds', content_rowid='id', tokenize='porter unicode61'
 );
@@ -58,13 +65,45 @@ CREATE TABLE IF NOT EXISTS folders (
   added_at   INTEGER NOT NULL,
   scanned_at INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS collections (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL UNIQUE,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS collection_sounds (
+  collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+  sound_id      INTEGER NOT NULL REFERENCES sounds(id) ON DELETE CASCADE,
+  added_at      INTEGER NOT NULL,
+  PRIMARY KEY (collection_id, sound_id)
+);
+CREATE INDEX IF NOT EXISTS idx_cs_sound ON collection_sounds(sound_id);
 `;
+
+// Columns added after the original V1 schema — ALTER them in for pre-existing DBs.
+const ADDED_COLUMNS = [
+  ['kind', "TEXT NOT NULL DEFAULT 'sfx'"],
+  ['artist', 'TEXT'],
+  ['album', 'TEXT'],
+  ['genre', 'TEXT'],
+  ['bpm', 'REAL'],
+  ['year', 'INTEGER'],
+];
+
+function migrate(db) {
+  const cols = new Set(db.prepare(`PRAGMA table_info(sounds)`).all().map((c) => c.name));
+  for (const [col, def] of ADDED_COLUMNS) {
+    if (!cols.has(col)) db.exec(`ALTER TABLE sounds ADD COLUMN ${col} ${def}`);
+  }
+}
 
 function openDb(dbPath) {
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA);
+  migrate(db);
   return new AkasiDb(db);
 }
 
@@ -105,19 +144,29 @@ class AkasiDb {
       license: s.license || null,
       attribution: s.attribution || null,
       tags: Array.isArray(s.tags) ? s.tags.join(' ') : s.tags || null,
+      kind: s.kind || 'sfx',
+      artist: s.artist || null,
+      album: s.album || null,
+      genre: s.genre || null,
+      bpm: s.bpm ?? null,
+      year: s.year ?? null,
       added_at: now,
     };
     const stmt = this.db.prepare(`
       INSERT INTO sounds (source, source_id, name, path, url, cached_path, duration,
-                          samplerate, channels, filesize, license, attribution, tags, added_at)
+                          samplerate, channels, filesize, license, attribution, tags,
+                          kind, artist, album, genre, bpm, year, added_at)
       VALUES (@source, @source_id, @name, @path, @url, @cached_path, @duration,
-              @samplerate, @channels, @filesize, @license, @attribution, @tags, @added_at)
+              @samplerate, @channels, @filesize, @license, @attribution, @tags,
+              @kind, @artist, @album, @genre, @bpm, @year, @added_at)
       ON CONFLICT(source, source_id) DO UPDATE SET
         name=excluded.name, path=excluded.path, url=excluded.url,
         cached_path=COALESCE(excluded.cached_path, sounds.cached_path),
         duration=excluded.duration, samplerate=excluded.samplerate,
         channels=excluded.channels, filesize=excluded.filesize,
-        license=excluded.license, attribution=excluded.attribution, tags=excluded.tags
+        license=excluded.license, attribution=excluded.attribution, tags=excluded.tags,
+        kind=excluded.kind, artist=excluded.artist, album=excluded.album,
+        genre=excluded.genre, bpm=excluded.bpm, year=excluded.year
       RETURNING id
     `);
     return stmt.get(row).id;
@@ -130,10 +179,10 @@ class AkasiDb {
 
   /**
    * Keyword search. Empty query → most-recent library rows (browse mode).
-   * opts: { limit, offset, source, favoritesOnly }
+   * opts: { limit, offset, source, favoritesOnly, kind, collectionId }
    */
   search(query, opts = {}) {
-    const limit = Math.min(opts.limit || 100, 500);
+    const limit = Math.min(opts.limit || 200, 2000);
     const offset = opts.offset || 0;
     const filters = [];
     const params = {};
@@ -142,15 +191,23 @@ class AkasiDb {
       params.source = opts.source;
     }
     if (opts.favoritesOnly) filters.push('s.favorite = 1');
+    if (opts.kind) {
+      filters.push('s.kind = @kind');
+      params.kind = opts.kind;
+    }
+    if (opts.collectionId) {
+      filters.push('s.id IN (SELECT sound_id FROM collection_sounds WHERE collection_id = @collectionId)');
+      params.collectionId = opts.collectionId;
+    }
 
     const fts = toFtsQuery(query);
     if (fts) {
       params.fts = fts;
-      const where = ['s.id IN (SELECT rowid FROM sounds_fts WHERE sounds_fts MATCH @fts)', ...filters].join(' AND ');
+      const where = ['sounds_fts MATCH @fts', ...filters].join(' AND ');
       return this.db
         .prepare(
           `SELECT s.* FROM sounds s
-           JOIN sounds_fts f ON f.rowid = s.id
+           JOIN sounds_fts ON sounds_fts.rowid = s.id
            WHERE ${where}
            ORDER BY bm25(sounds_fts), s.use_count DESC
            LIMIT @limit OFFSET @offset`
@@ -185,7 +242,49 @@ class AkasiDb {
     const total = this.db.prepare('SELECT COUNT(*) c FROM sounds').get().c;
     const bySource = this.db.prepare('SELECT source, COUNT(*) c FROM sounds GROUP BY source').all();
     const favorites = this.db.prepare('SELECT COUNT(*) c FROM sounds WHERE favorite = 1').get().c;
-    return { total, favorites, bySource };
+    const music = this.db.prepare("SELECT COUNT(*) c FROM sounds WHERE kind = 'music'").get().c;
+    return { total, favorites, music, bySource };
+  }
+
+  /* ---------------------------- collections ---------------------------- */
+
+  createCollection(name) {
+    return this.db
+      .prepare('INSERT INTO collections(name, created_at) VALUES (?, ?) RETURNING id')
+      .get(name, Date.now()).id;
+  }
+  renameCollection(id, name) {
+    return this.db.prepare('UPDATE collections SET name = ? WHERE id = ?').run(name, id).changes;
+  }
+  deleteCollection(id) {
+    return this.db.prepare('DELETE FROM collections WHERE id = ?').run(id).changes;
+  }
+  addToCollection(collectionId, soundId) {
+    return this.db
+      .prepare('INSERT OR IGNORE INTO collection_sounds(collection_id, sound_id, added_at) VALUES (?, ?, ?)')
+      .run(collectionId, soundId, Date.now()).changes;
+  }
+  removeFromCollection(collectionId, soundId) {
+    return this.db
+      .prepare('DELETE FROM collection_sounds WHERE collection_id = ? AND sound_id = ?')
+      .run(collectionId, soundId).changes;
+  }
+  /** Collections with member counts, newest first. */
+  listCollections() {
+    return this.db
+      .prepare(
+        `SELECT c.id, c.name, c.created_at,
+                (SELECT COUNT(*) FROM collection_sounds cs WHERE cs.collection_id = c.id) AS count
+         FROM collections c ORDER BY c.name COLLATE NOCASE`
+      )
+      .all();
+  }
+  /** Collection ids a given sound belongs to. */
+  collectionsForSound(soundId) {
+    return this.db
+      .prepare('SELECT collection_id FROM collection_sounds WHERE sound_id = ?')
+      .all(soundId)
+      .map((r) => r.collection_id);
   }
 
   addFolder(p) {

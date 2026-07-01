@@ -75,6 +75,16 @@ ipcMain.handle('lib:favorite', (_e, id) => db.toggleFavorite(id));
 ipcMain.handle('lib:folders', () => db.listFolders());
 ipcMain.handle('providers:list', () => providers.availableProviders());
 
+/* -------------------------- IPC: collections -------------------------- */
+
+ipcMain.handle('col:list', () => db.listCollections());
+ipcMain.handle('col:create', (_e, name) => db.createCollection(name));
+ipcMain.handle('col:rename', (_e, { id, name }) => db.renameCollection(id, name));
+ipcMain.handle('col:delete', (_e, id) => db.deleteCollection(id));
+ipcMain.handle('col:add', (_e, { collectionId, soundId }) => db.addToCollection(collectionId, soundId));
+ipcMain.handle('col:remove', (_e, { collectionId, soundId }) => db.removeFromCollection(collectionId, soundId));
+ipcMain.handle('col:forSound', (_e, soundId) => db.collectionsForSound(soundId));
+
 ipcMain.handle('folders:add', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'multiSelections'] });
   if (r.canceled) return { canceled: true };
