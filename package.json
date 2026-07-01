@@ -1,0 +1,54 @@
+{
+  "name": "akasi-sounds",
+  "version": "0.1.0",
+  "productName": "Akasi Sounds",
+  "description": "Local-first sound-effects library manager for video editors — search, audition, drag to timeline.",
+  "author": "Akasi Labs",
+  "license": "MIT",
+  "main": "electron/main.js",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:vite\" \"npm:dev:electron\"",
+    "dev:vite": "vite",
+    "dev:electron": "wait-on tcp:5273 && cross-env AKASI_DEV=1 electron .",
+    "build:renderer": "vite build",
+    "start": "electron .",
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "postinstall": "electron-rebuild -f -w better-sqlite3 || true",
+    "test:core": "node scripts/smoke.js",
+    "dist:mac": "npm run build:renderer && electron-builder --mac",
+    "dist:all": "npm run build:renderer && electron-builder -mwl"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.7.1",
+    "@vitejs/plugin-react": "^4.7.0",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^33.3.1",
+    "electron-builder": "^25.1.8",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^6.4.3",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "labs.akasi.sounds",
+    "productName": "Akasi Sounds",
+    "files": [
+      "electron/**",
+      "src/**",
+      "renderer/dist/**",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.music",
+      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }]
+    },
+    "win": { "target": "nsis" },
+    "linux": { "target": "AppImage", "category": "AudioVideo" },
+    "directories": { "output": "dist-app" }
+  }
+}
