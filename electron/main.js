@@ -3,9 +3,19 @@
  * Akasi Sounds main process — owns the index, providers, and (crucially) the native
  * drag-out to the OS so sounds land in Premiere/Resolve/FCP as real clips.
  */
-const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, protocol, net } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
+const { pathToFileURL } = require('node:url');
+
+// Serve local audio through a privileged custom scheme. In dev the renderer origin
+// is http://localhost, and Electron's webSecurity blocks loading file:// media/fetch
+// from an http origin — which silently kills both playback and waveform decode. A
+// privileged scheme works identically in dev and packaged builds.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'akmedia', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, bypassCSP: true } },
+]);
+const mediaUrl = (absPath) => `akmedia://audio/${encodeURIComponent(absPath)}`;
 
 const { openDb } = require('../src/db');
 const providers = require('../src/providers');
@@ -59,6 +69,12 @@ function createWindow() {
 
 app.whenReady().then(() => {
   db = openDb(path.join(dataDir(), 'akasi-sounds-index.db'));
+  // Map akmedia://audio/<encoded-abs-path> → the real file on disk.
+  protocol.handle('akmedia', (request) => {
+    const encoded = new URL(request.url).pathname.replace(/^\//, '');
+    const filePath = decodeURIComponent(encoded);
+    return net.fetch(pathToFileURL(filePath).toString());
+  });
   createWindow();
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow());
 });
@@ -114,7 +130,7 @@ ipcMain.handle('audio:resolve', async (_e, id) => {
   if (!s) throw new Error('not found');
   const local = await ensureCached(cacheDir(), s, freesound.fetchPreview);
   if (s.source !== 'local' && local !== s.cached_path) db.setCachedPath(id, local);
-  return { path: local };
+  return { path: local, url: mediaUrl(local) };
 });
 
 // Native OS drag: render (optionally cropped/faded) WAV, then hand it to the OS.

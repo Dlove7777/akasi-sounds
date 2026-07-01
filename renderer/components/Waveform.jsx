@@ -28,9 +28,10 @@ export default function Waveform({ sound, cueToken, fades, onFadesChange }) {
     setPeaks(null); setSel(null); setPos(0); setPlaying(false);
     if (!sound) return;
     (async () => {
-      const { path } = await window.akasi.resolveAudio(sound.id);
-      if (cancelled || !path) { setSrc(''); return; }
-      const url = path.startsWith('file:') ? path : `file://${path}`;
+      const resolved = await window.akasi.resolveAudio(sound.id);
+      // Prefer the privileged media URL from main; fall back to a file URL.
+      const url = resolved?.url || (resolved?.path ? `file://${resolved.path}` : '');
+      if (cancelled || !url) { setSrc(''); return; }
       setSrc(url);
       try {
         const buf = await fetch(url).then((r) => r.arrayBuffer());
