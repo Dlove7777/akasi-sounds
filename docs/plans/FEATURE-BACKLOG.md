@@ -65,8 +65,11 @@ preview-verify if UI-visible → commit + push `main` → check item off with a 
   floating batch bar: Favorite-all, add-all-to-collection, multi-file native drag
   (original/cached files via `startDrag({files})` — no crop/FX on batch), transactional
   DB batch methods. 44/44; range→favorite flow verified in preview.
-- [ ] **10. Waveform hover-scrub on rows** — hover a row's mini waveform to preview from
-  that point without changing dock selection (BaseHead snappiness).
+- [x] **10. Waveform hover-scrub on rows** — ✅ 2026-07-02. ⌥-hover a row's mini
+  waveform scrub-previews from that exact point via one shared scrub `<audio>`
+  (90ms-throttled seeks, URL cache); amber scrub line on the row canvas; dock
+  pauses itself on `akasi:scrub-start`. Alt-gated so casual mousing stays silent.
+  Verified pixel-level in preview (line draws at 60% hover, clears on leave).
 - [ ] **11. Credits/attribution export** — per-collection Markdown/CSV manifest;
   flag CC-BY-NC as non-client-safe (plan U12).
 - [ ] **12. Tabbed / locked searches** — search tabs scoped to a collection or scope

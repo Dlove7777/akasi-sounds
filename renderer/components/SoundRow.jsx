@@ -19,9 +19,45 @@ async function getPeaks(sound) {
   return peaksInflight.get(sound.id);
 }
 
+// Shared hover-scrub player — one <audio> for the whole list. ⌥-hovering a row's
+// waveform previews from that exact point (BaseHead-style) without touching the
+// dock selection. The dock pauses itself via the akasi:scrub-start event.
+let scrubEl = null;
+const scrubUrl = new Map(); // id → url | null
+function scrubAudio() {
+  if (!scrubEl) { scrubEl = new Audio(); scrubEl.preload = 'auto'; }
+  return scrubEl;
+}
+async function scrubTo(sound, frac) {
+  window.dispatchEvent(new Event('akasi:scrub-start')); // dock ducks immediately
+  let url = scrubUrl.get(sound.id);
+  if (url === undefined) {
+    try {
+      const r = await window.akasi.resolveAudio(sound.id);
+      url = r?.url || (r?.path ? `file://${r.path}` : null);
+    } catch { url = null; }
+    scrubUrl.set(sound.id, url);
+  }
+  if (!url) return;
+  const a = scrubAudio();
+  if (a._sid !== sound.id) { a.src = url; a._sid = sound.id; }
+  const seek = () => {
+    const d = a.duration || sound.duration || 0;
+    if (d) a.currentTime = Math.min(d - 0.02, frac * d);
+    a.play().catch(() => {});
+  };
+  if (a.readyState >= 1) seek();
+  else a.onloadedmetadata = seek;
+}
+function scrubStop() {
+  if (scrubEl) scrubEl.pause();
+}
+
 function RowWave({ sound, selected }) {
   const ref = useRef(null);
   const [peaks, setPeaks] = useState(sound.peaks || peaksCache.get(sound.id));
+  const [scrubFrac, setScrubFrac] = useState(null);
+  const lastScrub = useRef(0);
 
   useEffect(() => {
     let alive = true;
@@ -38,17 +74,45 @@ function RowWave({ sound, selected }) {
     if (!peaks || !peaks.length) {
       ctx.fillStyle = 'rgba(86,93,115,0.25)';
       ctx.fillRect(0, h / 2 - 0.5, w, 1);
-      return;
+    } else {
+      const n = peaks.length, bw = w / n, mid = h / 2;
+      ctx.fillStyle = selected ? '#4fd1c5' : '#39405a';
+      for (let i = 0; i < n; i++) {
+        const bh = Math.max(1, (peaks[i] / 255) * (h * 0.92));
+        ctx.fillRect(i * bw, mid - bh / 2, Math.max(0.6, bw - 0.4), bh);
+      }
     }
-    const n = peaks.length, bw = w / n, mid = h / 2;
-    ctx.fillStyle = selected ? '#4fd1c5' : '#39405a';
-    for (let i = 0; i < n; i++) {
-      const bh = Math.max(1, (peaks[i] / 255) * (h * 0.92));
-      ctx.fillRect(i * bw, mid - bh / 2, Math.max(0.6, bw - 0.4), bh);
+    if (scrubFrac != null) {
+      ctx.strokeStyle = '#f0b429';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(scrubFrac * w, 0);
+      ctx.lineTo(scrubFrac * w, h);
+      ctx.stroke();
     }
-  }, [peaks, selected]);
+  }, [peaks, selected, scrubFrac]);
 
-  return <canvas ref={ref} className="row-wave" width={200} height={26} />;
+  function onMove(e) {
+    if (!e.altKey) { if (scrubFrac != null) { setScrubFrac(null); scrubStop(); } return; }
+    e.stopPropagation();
+    const rect = ref.current.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    setScrubFrac(frac);
+    const now = performance.now();
+    if (now - lastScrub.current > 90) { lastScrub.current = now; scrubTo(sound, frac); }
+  }
+  function onLeave() {
+    if (scrubFrac != null) { setScrubFrac(null); scrubStop(); }
+  }
+
+  return (
+    <canvas
+      ref={ref} className="row-wave" width={200} height={26}
+      title="⌥-hover to scrub-preview"
+      onMouseMove={onMove} onMouseLeave={onLeave} onMouseOut={onLeave}
+      onClick={(e) => { if (e.altKey) e.stopPropagation(); }}
+    />
+  );
 }
 
 const fmtDur = (s) =>

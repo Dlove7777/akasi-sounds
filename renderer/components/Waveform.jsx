@@ -113,6 +113,17 @@ export default function Waveform({
   // A new cue (arrow-key or click audition) requests auto-play once the file loads.
   useEffect(() => { if (cueToken) wantPlayRef.current = true; }, [cueToken]);
 
+  // A row hover-scrub takes over the speakers — pause the dock player.
+  useEffect(() => {
+    const onScrub = () => {
+      const a = audioRef.current;
+      if (a && !a.paused) { a.pause(); setPlaying(false); }
+      wantPlayRef.current = false;
+    };
+    window.addEventListener('akasi:scrub-start', onScrub);
+    return () => window.removeEventListener('akasi:scrub-start', onScrub);
+  }, []);
+
   // Live varispeed: pitch + tempo together, like a Soundminer varispeed fader.
   useEffect(() => {
     const a = audioRef.current;

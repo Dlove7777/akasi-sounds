@@ -5,6 +5,7 @@ const GROUPS = [
     title: 'Browse & audition',
     keys: [
       ['↑ / ↓', 'Move selection + audition'],
+      ['⌥ hover waveform', 'Scrub-preview a row in place'],
       ['Space', 'Play / pause'],
       ['← / →', 'Seek ±1s'],
       ['L', 'Loop playback'],
