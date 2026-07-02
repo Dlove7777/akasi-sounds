@@ -133,12 +133,15 @@ function toFtsQuery(q) {
     .split(/\s+/)
     .filter(Boolean);
   if (!terms.length) return null;
+  // Join with explicit AND: FTS5 rejects a bare term immediately followed by a
+  // parenthesized group (`a* (b* OR c*)` → syntax error), which our synonym
+  // expansion produces. `AND` is unambiguous and behaves the same as implicit-AND.
   return terms
     .map((t) => {
       const syn = thesaurus.expand(t);
       return syn.length > 1 ? `(${syn.map((s) => `${s}*`).join(' OR ')})` : `${t}*`;
     })
-    .join(' ');
+    .join(' AND ');
 }
 
 class AkasiDb {

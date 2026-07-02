@@ -63,6 +63,11 @@ const ok = (label, cond, extra = '') => {
   ok('toFtsQuery expands synonym groups', /whoosh\*/.test(fts) && /impact\*/.test(fts) && /OR/.test(fts), fts.slice(0, 60) + '…');
   const viaSyn = db.search('rumble');
   ok('Synonym search hits sibling-tagged row', viaSyn.length === 1 && viaSyn[0].name.includes('thunder'), `${viaSyn.length} hit(s)`);
+  // Regression: a bare term next to a synonym group must not throw FTS5 syntax error
+  // ("background" expands to a group). Caught live via the Hermes Music Director.
+  let ftsThrew = false;
+  try { db.search('storm background music'); } catch { ftsThrew = true; }
+  ok('Multi-term query with synonym group does not break FTS5', !ftsThrew);
   const sug = db.suggest('thu');
   ok('Vocab autocomplete suggests indexed terms', sug.includes('thunder'), sug.join(','));
 
