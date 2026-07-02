@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
+import thesaurus from './lib/thesaurus.js';
 import './styles.css';
 
 // When running in a plain browser (design preview) instead of Electron, `window.akasi`
@@ -63,13 +64,24 @@ if (!window.akasi) {
   const membership = { 1: new Set([1, 3, 5, 7]), 2: new Set([901, 905, 910]) };
   let cid = 3;
 
+  // Thesaurus-expanded match, mirroring the real FTS behavior: AND across terms,
+  // OR within a term's synonym group.
+  const matches = (d, q) => {
+    if (!q) return true;
+    const hay = (d.name + ' ' + (d.tags || '') + ' ' + (d.artist || '') + ' ' + (d.genre || '')).toLowerCase();
+    return q.toLowerCase().split(/\s+/).filter(Boolean)
+      .every((term) => thesaurus.expand(term).some((syn) => hay.includes(syn)));
+  };
   const filt = (q, o = {}) => demo.filter((d) =>
     (!o.favoritesOnly || d.favorite) &&
     (!o.source || d.source === o.source) &&
     (!o.kind || d.kind === o.kind) &&
     (!o.collectionId || (membership[o.collectionId] && membership[o.collectionId].has(d.id))) &&
-    (!q || (d.name + ' ' + (d.tags || '') + ' ' + (d.artist || '') + ' ' + (d.genre || '')).toLowerCase().includes(q.toLowerCase()))
+    matches(d, q)
   ).slice(0, o.limit || 2000);
+
+  const vocab = [...new Set(demo.flatMap((d) => (d.name + ' ' + (d.tags || '')).toLowerCase().split(/[^a-z]+/)))]
+    .filter((t) => t.length > 2);
 
   const listCollections = () => collections.map((c) => ({ ...c, count: (membership[c.id] || new Set()).size }));
 
@@ -86,6 +98,7 @@ if (!window.akasi) {
     listFolders: async () => [{ path: '/Users/you/SFX Library' }, { path: '/Users/you/Music/Beds' }],
     addFolders: async () => ({ added: [] }),
     providers: async () => [{ id: 'freesound', label: 'Freesound' }],
+    suggest: async (prefix) => vocab.filter((t) => t.startsWith(prefix.toLowerCase())).slice(0, 8),
     remoteSearch: async (p, q) => ({ count: 0, results: filt(q, { source: p }) }),
     resolveAudio: async () => ({ path: '' }),
     peaks: async (sid) => mkPeaks(sid),

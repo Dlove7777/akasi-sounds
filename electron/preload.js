@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('akasi', {
   listFolders: () => ipcRenderer.invoke('lib:folders'),
   addFolders: () => ipcRenderer.invoke('folders:add'),
   providers: () => ipcRenderer.invoke('providers:list'),
+  suggest: (prefix) => ipcRenderer.invoke('lib:suggest', prefix),
   remoteSearch: (provider, query, page) => ipcRenderer.invoke('remote:search', { provider, query, page }),
   resolveAudio: (id, fx) => ipcRenderer.invoke('audio:resolve', id, fx),
   peaks: (id) => ipcRenderer.invoke('audio:peaks', id),

@@ -113,6 +113,28 @@ input { font-family: inherit; }
 }
 .count { font-size: 11.5px; color: var(--muted-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .busy { font-size: 12px; color: var(--accent-2); white-space: nowrap; }
+.syn-hint {
+  position: absolute; left: 34px; bottom: -3px; font-size: 10px; color: var(--muted-2);
+  pointer-events: none; letter-spacing: 0.01em;
+}
+.sug-panel {
+  position: absolute; top: 52px; left: 18px; right: 18px; z-index: 40;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 16px 44px rgba(0,0,0,0.55); padding: 6px; max-height: 300px; overflow: auto;
+  -webkit-app-region: no-drag;
+}
+.sug-title {
+  display: flex; justify-content: space-between; font-size: 9.5px; text-transform: uppercase;
+  letter-spacing: 0.09em; color: var(--muted-2); font-weight: 600; padding: 5px 9px 3px;
+}
+.sug-hint { text-transform: none; letter-spacing: 0; font-weight: 400; font-family: var(--mono); }
+.sug-item {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  background: none; border: 0; color: var(--text); font-size: 13px; padding: 6px 9px;
+  border-radius: 6px;
+}
+.sug-item:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.sug-ico { color: var(--muted-2); font-size: 11px; width: 12px; }
 
 .empty {
   display: flex; align-items: center; justify-content: center; text-align: center;

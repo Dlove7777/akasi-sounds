@@ -57,6 +57,15 @@ const ok = (label, cond, extra = '') => {
   const tags = tagsFromPath('/lib', '/lib/footsteps/gravel/step_03.wav');
   ok('tagsFromPath derives folder+name tags', tags.includes('footsteps') && tags.includes('gravel') && tags.includes('step'), tags);
 
+  // 1b. Thesaurus expansion: "rumble" finds the row tagged only "thunder storm"
+  const { toFtsQuery } = require('../src/db');
+  const fts = toFtsQuery('swish hit');
+  ok('toFtsQuery expands synonym groups', /whoosh\*/.test(fts) && /impact\*/.test(fts) && /OR/.test(fts), fts.slice(0, 60) + '…');
+  const viaSyn = db.search('rumble');
+  ok('Synonym search hits sibling-tagged row', viaSyn.length === 1 && viaSyn[0].name.includes('thunder'), `${viaSyn.length} hit(s)`);
+  const sug = db.suggest('thu');
+  ok('Vocab autocomplete suggests indexed terms', sug.includes('thunder'), sug.join(','));
+
   // 2b. Music kind + Music scope
   db.upsertMany([
     { source: 'local', source_id: '/m/bed.wav', name: 'Cinematic Bed.wav', kind: 'music', artist: 'Akasi Studio', genre: 'Cinematic', bpm: 90, tags: 'cinematic bed akasi studio' },

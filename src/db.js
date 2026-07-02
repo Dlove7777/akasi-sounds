@@ -9,6 +9,7 @@
  * column + a vector index. Collections group sounds many-to-many.
  */
 const Database = require('better-sqlite3');
+const thesaurus = require('./thesaurus');
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS sounds (
@@ -60,6 +61,9 @@ CREATE TRIGGER IF NOT EXISTS sounds_au AFTER UPDATE ON sounds BEGIN
   INSERT INTO sounds_fts(rowid, name, tags) VALUES (new.id, new.name, new.tags);
 END;
 
+-- Read-only view over the FTS index vocabulary — powers search autocomplete.
+CREATE VIRTUAL TABLE IF NOT EXISTS sounds_fts_v USING fts5vocab('sounds_fts', 'row');
+
 CREATE TABLE IF NOT EXISTS folders (
   path       TEXT PRIMARY KEY,
   added_at   INTEGER NOT NULL,
@@ -108,7 +112,11 @@ function openDb(dbPath) {
   return new AkasiDb(db);
 }
 
-/** Turn a free-text query into a safe FTS5 prefix-match expression. */
+/**
+ * Turn a free-text query into a safe FTS5 expression: AND across the user's terms,
+ * OR within each term's thesaurus group — "swish hit" matches files tagged only
+ * "whoosh impact".
+ */
 function toFtsQuery(q) {
   const terms = String(q || '')
     .toLowerCase()
@@ -116,7 +124,12 @@ function toFtsQuery(q) {
     .split(/\s+/)
     .filter(Boolean);
   if (!terms.length) return null;
-  return terms.map((t) => `${t}*`).join(' ');
+  return terms
+    .map((t) => {
+      const syn = thesaurus.expand(t);
+      return syn.length > 1 ? `(${syn.map((s) => `${s}*`).join(' OR ')})` : `${t}*`;
+    })
+    .join(' ');
 }
 
 class AkasiDb {
@@ -241,6 +254,17 @@ class AkasiDb {
 
   setPeaks(id, buf) {
     return this.db.prepare('UPDATE sounds SET peaks = ? WHERE id = ?').run(buf, id).changes;
+  }
+
+  /** Autocomplete: indexed terms starting with `prefix`, most frequent first. */
+  suggest(prefix, limit = 8) {
+    const p = String(prefix || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+    if (p.length < 2) return [];
+    return this.db
+      .prepare(`SELECT term FROM sounds_fts_v WHERE term LIKE ? || '%' AND length(term) > 2
+                ORDER BY cnt DESC LIMIT ?`)
+      .all(p, limit)
+      .map((r) => r.term);
   }
 
   stats() {

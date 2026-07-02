@@ -3,6 +3,10 @@ import Sidebar from './components/Sidebar.jsx';
 import ResultsList from './components/ResultsList.jsx';
 import Waveform from './components/Waveform.jsx';
 import CheatSheet from './components/CheatSheet.jsx';
+import thesaurus from './lib/thesaurus.js';
+
+const RECENT_KEY = 'akasi.recent';
+const loadRecent = () => { try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch { return []; } };
 
 const AUDITION_DEBOUNCE = 120; // ms — avoid a fetch storm while arrow-scrubbing
 
@@ -19,6 +23,9 @@ export default function App() {
   const [fx, setFx] = useState({ semi: 0, reverse: false, gainDb: 0 });
   const [autoPlay, setAutoPlay] = useState(() => localStorage.getItem('akasi.autoplay') !== '0');
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [sugs, setSugs] = useState([]);
+  const [searchFocus, setSearchFocus] = useState(false);
+  const [recent, setRecent] = useState(loadRecent);
   const [stats, setStats] = useState({ total: 0, favorites: 0, music: 0 });
   const [providers, setProviders] = useState([]);
   const [folders, setFolders] = useState([]);
@@ -103,6 +110,38 @@ export default function App() {
     if (!r.error) { setResults(r.results); await loadMeta(); }
   }
 
+  // Autocomplete on the last token; synonym hint from the thesaurus.
+  useEffect(() => {
+    const last = query.trim().split(/\s+/).pop() || '';
+    if (!searchFocus || last.length < 2 || !window.akasi.suggest) { setSugs([]); return; }
+    let alive = true;
+    window.akasi.suggest(last).then((s) => alive && setSugs((s || []).filter((t) => t !== last)));
+    return () => { alive = false; };
+  }, [query, searchFocus]);
+
+  const synHint = query.trim().split(/\s+/).filter(Boolean)
+    .flatMap((t) => thesaurus.synonymsOf(t)).slice(0, 6);
+
+  // Commit a "kept" query to recent searches after a beat of no typing.
+  useEffect(() => {
+    const q = query.trim().toLowerCase();
+    if (q.length < 3 || !results.length) return;
+    const t = setTimeout(() => {
+      setRecent((r) => {
+        const next = [q, ...r.filter((x) => x !== q)].slice(0, 8);
+        localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+        return next;
+      });
+    }, 1800);
+    return () => clearTimeout(t);
+  }, [query, results.length]);
+
+  function acceptSuggestion(term) {
+    const parts = query.trim().split(/\s+/);
+    parts[parts.length ? parts.length - 1 : 0] = term;
+    setQuery(parts.join(' ') + ' ');
+  }
+
   function onScope(s) { setRemoteMode(false); setScope(s); setActiveCollectionId(null); }
   function onCollection(id) { setRemoteMode(false); setScope('collection'); setActiveCollectionId(id); }
   function onRemote(id) { setRemoteMode(id); setResults([]); }
@@ -117,6 +156,7 @@ export default function App() {
       cue(results[Math.min(results.length - 1, idx < 0 ? 0 : idx + 1)]);
       return;
     }
+    if (e.key === 'Tab' && sugs.length) { e.preventDefault(); acceptSuggestion(sugs[0]); return; }
     if (e.key === 'Escape') e.target.blur();
   }
 
@@ -185,13 +225,44 @@ export default function App() {
           <input
             autoFocus
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => { setQuery(e.target.value); setSearchFocus(true); }}
             onKeyDown={onSearchKey}
+            onFocus={() => setSearchFocus(true)}
+            onClick={() => setSearchFocus(true)}
+            onBlur={() => setTimeout(() => setSearchFocus(false), 140)}
             placeholder={placeholder}
           />
           {remoteMode && <button className="go" onClick={() => runRemote(remoteMode)}>Search</button>}
           <span className="count">{results.length ? `${results.length.toLocaleString()} results` : ''}</span>
           {busy && <span className="busy">{busy}</span>}
+
+          {searchFocus && (sugs.length > 0 || (!query.trim() && recent.length > 0)) && (
+            <div className="sug-panel">
+              {!query.trim() && recent.length > 0 && (
+                <>
+                  <div className="sug-title">Recent</div>
+                  {recent.map((r) => (
+                    <button key={r} className="sug-item" onMouseDown={(e) => { e.preventDefault(); setQuery(r); }}>
+                      <span className="sug-ico">↩</span>{r}
+                    </button>
+                  ))}
+                </>
+              )}
+              {sugs.length > 0 && (
+                <>
+                  <div className="sug-title">Suggestions <span className="sug-hint">Tab completes</span></div>
+                  {sugs.map((s) => (
+                    <button key={s} className="sug-item" onMouseDown={(e) => { e.preventDefault(); acceptSuggestion(s); }}>
+                      <span className="sug-ico">⌕</span>{s}
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+          {query.trim() && synHint.length > 0 && (
+            <span className="syn-hint" title="Thesaurus-expanded search">≈ {synHint.join(' · ')}</span>
+          )}
         </div>
 
         {results.length === 0 ? (

@@ -36,9 +36,13 @@ preview-verify if UI-visible → commit + push `main` → check item off with a 
 
 ## P2 — find sounds like a librarian
 
-- [ ] **5. Search thesaurus + autocomplete** — built-in SFX synonym map (whoosh ≈
-  swish/swoosh/pass-by; hit ≈ impact/thud/slam …), OR-expanded FTS query; autocomplete
-  dropdown fed by indexed tags + recent searches (persisted).
+- [x] **5. Search thesaurus + autocomplete** — ✅ 2026-07-02. 28 curated synonym
+  groups (`src/thesaurus-groups.json`, single source; CJS loader for main, thin ESM
+  mirror for renderer), OR-within-group/AND-across-terms FTS ("swish" finds
+  whoosh-only files); `fts5vocab`-backed autocomplete (Tab completes, freq-ranked);
+  recent searches (localStorage, auto-committed); "≈ synonyms" hint line. Gotchas:
+  CJS import from renderer blanked dev mount (→ JSON+dual loaders); React onFocus
+  doesn't fire for autofocused inputs (→ open panel on type/click too). 32/32.
 - [ ] **6. Recently Used + use-count surfacing** — "Recent" scope (we already track
   `use_count`/`last_used_at`), sort options (relevance / newest / duration / most-used),
   subtle use-count dot on rows. (Soundminer Spotting-panel energy, minus the modal UI.)

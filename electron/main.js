@@ -90,6 +90,7 @@ ipcMain.handle('lib:stats', () => db.stats());
 ipcMain.handle('lib:favorite', (_e, id) => db.toggleFavorite(id));
 ipcMain.handle('lib:folders', () => db.listFolders());
 ipcMain.handle('providers:list', () => providers.availableProviders());
+ipcMain.handle('lib:suggest', (_e, prefix) => db.suggest(prefix));
 
 /* -------------------------- IPC: collections -------------------------- */
 
