@@ -137,6 +137,11 @@ const ok = (label, cond, extra = '') => {
   ok('BPM range filter', db.search('', { bpmMin: 85, bpmMax: 95 }).some((r) => r.id === mId) &&
      !db.search('', { bpmMin: 140 }).some((r) => r.id === mId));
   ok('Vocals filter (instrumental)', db.search('', { vocals: 0 }).some((r) => r.id === mId));
+  // NULL-tolerance: an un-analyzed row (no bpm/vocals) must survive bpm/vocals
+  // filters — else filters nuke a library that hasn't been analyzed yet.
+  const rawId = db.upsertMany([{ source: 'local', source_id: '/m/raw.wav', name: 'Unanalyzed Bed.wav', kind: 'music', tags: 'bed', duration: 60 }])[0];
+  ok('Un-analyzed row survives BPM filter (NULL-tolerant)', db.search('', { bpmMin: 100, bpmMax: 130 }).some((r) => r.id === rawId));
+  ok('Un-analyzed row survives instrumental filter (NULL-tolerant)', db.search('', { vocals: 0 }).some((r) => r.id === rawId));
   ok('Genre filter hits ai_genre too', db.search('', { genre: 'Ambient' }).some((r) => r.id === mId));
   ok('Duration bucket filter', db.search('', { durMin: 2, durMax: 15 }).every((r) => r.duration >= 2 && r.duration <= 15));
   ok('allEmbeddings returns the semantic index', db.allEmbeddings().some((r) => r.id === mId));

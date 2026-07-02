@@ -228,11 +228,14 @@ class AkasiDb {
       filters.push('s.id IN (SELECT sound_id FROM collection_sounds WHERE collection_id = @collectionId)');
       params.collectionId = opts.collectionId;
     }
-    if (opts.bpmMin != null) { filters.push('s.bpm >= @bpmMin'); params.bpmMin = opts.bpmMin; }
-    if (opts.bpmMax != null) { filters.push('s.bpm <= @bpmMax'); params.bpmMax = opts.bpmMax; }
+    // BPM and vocals come ONLY from AI analysis, so treat NULL (un-analyzed) as
+    // "unknown → don't exclude" — otherwise these filters nuke a library that
+    // hasn't been analyzed yet. Duration is set at index time, so it stays strict.
+    if (opts.bpmMin != null) { filters.push('(s.bpm IS NULL OR s.bpm >= @bpmMin)'); params.bpmMin = opts.bpmMin; }
+    if (opts.bpmMax != null) { filters.push('(s.bpm IS NULL OR s.bpm <= @bpmMax)'); params.bpmMax = opts.bpmMax; }
     if (opts.durMin != null) { filters.push('s.duration >= @durMin'); params.durMin = opts.durMin; }
     if (opts.durMax != null) { filters.push('s.duration <= @durMax'); params.durMax = opts.durMax; }
-    if (opts.vocals != null) { filters.push('s.vocals = @vocals'); params.vocals = opts.vocals ? 1 : 0; }
+    if (opts.vocals != null) { filters.push('(s.vocals IS NULL OR s.vocals = @vocals)'); params.vocals = opts.vocals ? 1 : 0; }
     if (opts.genre) { filters.push('(s.genre = @genre OR s.ai_genre = @genre)'); params.genre = opts.genre; }
 
     const ORDERS = {
