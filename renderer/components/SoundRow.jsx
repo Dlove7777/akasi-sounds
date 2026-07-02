@@ -101,7 +101,10 @@ export default function SoundRow({
       <span className="row-name" title={s.name}>{s.name}</span>
       <RowWave sound={s} selected={selected} />
       <span className="row-sub" title={secondary}>{secondary}</span>
-      <span className="row-num">{metaNum}</span>
+      <span className="row-num">
+        {metaNum}
+        {s.use_count > 0 && <em className="row-uses" title={`Used ${s.use_count}×`}>×{s.use_count}</em>}
+      </span>
       <span className="row-lic">{shortLicense(s.license)}</span>
       <div className="row-actions">
         <button

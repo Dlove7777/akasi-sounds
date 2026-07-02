@@ -66,6 +66,15 @@ const ok = (label, cond, extra = '') => {
   const sug = db.suggest('thu');
   ok('Vocab autocomplete suggests indexed terms', sug.includes('thunder'), sug.join(','));
 
+  // 1c. Recent scope + sort options
+  ok('Recent scope lists only used sounds', db.search('', { recentOnly: true }).length === 1 &&
+     db.search('', { recentOnly: true })[0].id === id);
+  ok('Stats counts recent', db.stats().recent === 1);
+  const byDur = db.search('', { sort: 'duration' });
+  ok('Sort by duration ascending', byDur[0].duration <= byDur[byDur.length - 1].duration,
+     `${byDur[0].duration}s → ${byDur[byDur.length - 1].duration}s`);
+  ok('Sort by most-used puts used row first', db.search('', { sort: 'used' })[0].id === id);
+
   // 2b. Music kind + Music scope
   db.upsertMany([
     { source: 'local', source_id: '/m/bed.wav', name: 'Cinematic Bed.wav', kind: 'music', artist: 'Akasi Studio', genre: 'Cinematic', bpm: 90, tags: 'cinematic bed akasi studio' },

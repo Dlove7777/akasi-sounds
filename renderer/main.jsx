@@ -40,6 +40,8 @@ if (!window.akasi) {
       tags, duration: +(0.3 + (i % 50) * 0.6).toFixed(1),
       license: lic, attribution: lic.startsWith('CC') ? `"${name}" by user (freesound.org)` : null,
       favorite: i % 17 === 0 ? 1 : 0,
+      use_count: i % 11 === 0 ? (i % 5) + 1 : 0,
+      last_used_at: i % 11 === 0 ? 1e12 + i * 1000 : null,
     });
   }
   for (let i = 0; i < 320; i++) {
@@ -72,13 +74,20 @@ if (!window.akasi) {
     return q.toLowerCase().split(/\s+/).filter(Boolean)
       .every((term) => thesaurus.expand(term).some((syn) => hay.includes(syn)));
   };
-  const filt = (q, o = {}) => demo.filter((d) =>
-    (!o.favoritesOnly || d.favorite) &&
-    (!o.source || d.source === o.source) &&
-    (!o.kind || d.kind === o.kind) &&
-    (!o.collectionId || (membership[o.collectionId] && membership[o.collectionId].has(d.id))) &&
-    matches(d, q)
-  ).slice(0, o.limit || 2000);
+  const filt = (q, o = {}) => {
+    let out = demo.filter((d) =>
+      (!o.favoritesOnly || d.favorite) &&
+      (!o.recentOnly || d.last_used_at) &&
+      (!o.source || d.source === o.source) &&
+      (!o.kind || d.kind === o.kind) &&
+      (!o.collectionId || (membership[o.collectionId] && membership[o.collectionId].has(d.id))) &&
+      matches(d, q)
+    );
+    if (o.sort === 'duration') out = [...out].sort((a, b) => (a.duration || 9e9) - (b.duration || 9e9));
+    else if (o.sort === 'used') out = [...out].sort((a, b) => (b.use_count || 0) - (a.use_count || 0));
+    else if (o.recentOnly) out = [...out].sort((a, b) => (b.last_used_at || 0) - (a.last_used_at || 0));
+    return out.slice(0, o.limit || 2000);
+  };
 
   const vocab = [...new Set(demo.flatMap((d) => (d.name + ' ' + (d.tags || '')).toLowerCase().split(/[^a-z]+/)))]
     .filter((t) => t.length > 2);
@@ -92,6 +101,7 @@ if (!window.akasi) {
       total: demo.length,
       favorites: demo.filter((d) => d.favorite).length,
       music: demo.filter((d) => d.kind === 'music').length,
+      recent: demo.filter((d) => d.last_used_at).length,
       bySource: [],
     }),
     toggleFavorite: async (sid) => { const d = demo.find((x) => x.id === sid); if (d) d.favorite = d.favorite ? 0 : 1; return 1; },

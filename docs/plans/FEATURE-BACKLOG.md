@@ -43,9 +43,10 @@ preview-verify if UI-visible → commit + push `main` → check item off with a 
   recent searches (localStorage, auto-committed); "≈ synonyms" hint line. Gotchas:
   CJS import from renderer blanked dev mount (→ JSON+dual loaders); React onFocus
   doesn't fire for autofocused inputs (→ open panel on type/click too). 32/32.
-- [ ] **6. Recently Used + use-count surfacing** — "Recent" scope (we already track
-  `use_count`/`last_used_at`), sort options (relevance / newest / duration / most-used),
-  subtle use-count dot on rows. (Soundminer Spotting-panel energy, minus the modal UI.)
+- [x] **6. Recently Used + use-count surfacing** — ✅ 2026-07-02. "Recent" scope in
+  sidebar (last-used order, live count), sort dropdown (relevance/newest/duration/
+  most-used) wired through db.search ORDER BY map, amber ×N badges on used rows.
+  36/36 smoke; verified in preview (most-used sort surfaces ×5 first).
 - [ ] **7. Inline metadata editing** — rename, edit tags, set kind (sfx/music) from a
   row context menu / inspector; writes back to the index (not the file) so licensing
   fields stay authoritative. (SoundQ metadata editing, index-side.)

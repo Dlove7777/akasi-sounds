@@ -192,8 +192,10 @@ class AkasiDb {
   }
 
   /**
-   * Keyword search. Empty query → most-recent library rows (browse mode).
-   * opts: { limit, offset, source, favoritesOnly, kind, collectionId }
+   * Keyword search. Empty query → browse mode.
+   * opts: { limit, offset, source, favoritesOnly, kind, collectionId, recentOnly,
+   *         sort: 'relevance' | 'newest' | 'duration' | 'used' }
+   * 'relevance' means bm25 when a query is present, else falls back to newest.
    */
   search(query, opts = {}) {
     const limit = Math.min(opts.limit || 200, 2000);
@@ -205,6 +207,7 @@ class AkasiDb {
       params.source = opts.source;
     }
     if (opts.favoritesOnly) filters.push('s.favorite = 1');
+    if (opts.recentOnly) filters.push('s.last_used_at IS NOT NULL');
     if (opts.kind) {
       filters.push('s.kind = @kind');
       params.kind = opts.kind;
@@ -214,23 +217,34 @@ class AkasiDb {
       params.collectionId = opts.collectionId;
     }
 
+    const ORDERS = {
+      newest: 's.added_at DESC',
+      duration: 's.duration ASC NULLS LAST',
+      used: 's.use_count DESC, s.last_used_at DESC',
+      recent: 's.last_used_at DESC',
+    };
+    // Recent scope defaults to last-used order; everything else to newest.
+    const fallback = opts.recentOnly ? ORDERS.recent : ORDERS.newest;
+    const explicit = ORDERS[opts.sort] || null;
+
     const fts = toFtsQuery(query);
     if (fts) {
       params.fts = fts;
       const where = ['sounds_fts MATCH @fts', ...filters].join(' AND ');
+      const order = explicit || 'bm25(sounds_fts), s.use_count DESC'; // relevance
       return this.db
         .prepare(
           `SELECT s.* FROM sounds s
            JOIN sounds_fts ON sounds_fts.rowid = s.id
            WHERE ${where}
-           ORDER BY bm25(sounds_fts), s.use_count DESC
+           ORDER BY ${order}
            LIMIT @limit OFFSET @offset`
         )
         .all({ ...params, limit, offset });
     }
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     return this.db
-      .prepare(`SELECT s.* FROM sounds s ${where} ORDER BY s.added_at DESC LIMIT @limit OFFSET @offset`)
+      .prepare(`SELECT s.* FROM sounds s ${where} ORDER BY ${explicit || fallback} LIMIT @limit OFFSET @offset`)
       .all({ ...params, limit, offset });
   }
 
@@ -272,7 +286,8 @@ class AkasiDb {
     const bySource = this.db.prepare('SELECT source, COUNT(*) c FROM sounds GROUP BY source').all();
     const favorites = this.db.prepare('SELECT COUNT(*) c FROM sounds WHERE favorite = 1').get().c;
     const music = this.db.prepare("SELECT COUNT(*) c FROM sounds WHERE kind = 'music'").get().c;
-    return { total, favorites, music, bySource };
+    const recent = this.db.prepare('SELECT COUNT(*) c FROM sounds WHERE last_used_at IS NOT NULL').get().c;
+    return { total, favorites, music, recent, bySource };
   }
 
   /* ---------------------------- collections ---------------------------- */

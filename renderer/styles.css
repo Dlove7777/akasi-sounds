@@ -172,6 +172,13 @@ input { font-family: inherit; }
 .row-wave { width: 104px; height: 26px; display: block; opacity: 0.9; }
 .row-sub { color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-num { color: var(--muted); font-size: 11.5px; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.row-uses { color: var(--accent-2); font-style: normal; font-size: 9.5px; margin-left: 5px; opacity: 0.85; }
+.sort-select {
+  -webkit-app-region: no-drag; background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 7px; color: var(--muted); font-size: 12px; padding: 7px 8px; outline: none;
+  font-family: var(--ui); cursor: pointer;
+}
+.sort-select:hover, .sort-select:focus { border-color: var(--accent); color: var(--text); }
 .row-lic { color: var(--muted-2); font-size: 10px; font-family: var(--mono); text-align: right; letter-spacing: 0.02em; }
 .row-actions { position: relative; display: flex; justify-content: center; }
 .add-btn {

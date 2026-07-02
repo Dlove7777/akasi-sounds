@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 const SCOPES = [
   { id: 'library', label: 'Library' },
   { id: 'favorites', label: 'Favorites' },
+  { id: 'recent', label: 'Recent' },
   { id: 'music', label: 'Music' },
 ];
 
@@ -39,6 +40,7 @@ export default function Sidebar({
           >
             <span>{s.label}</span>
             {s.id === 'favorites' && stats.favorites > 0 && <span className="side-count">{stats.favorites}</span>}
+            {s.id === 'recent' && stats.recent > 0 && <span className="side-count">{stats.recent}</span>}
             {s.id === 'music' && stats.music > 0 && <span className="side-count">{stats.music}</span>}
           </button>
         ))}

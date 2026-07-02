@@ -34,8 +34,11 @@ export default function App() {
   const isMock = window.akasi.__mock;
   const auditionTimer = useRef(null);
 
+  const [sort, setSort] = useState('relevance');
+
   const scopeOpts = useCallback(() => {
     if (scope === 'favorites') return { favoritesOnly: true };
+    if (scope === 'recent') return { recentOnly: true };
     if (scope === 'music') return { kind: 'music' };
     if (scope === 'collection' && activeCollectionId) return { collectionId: activeCollectionId };
     return {};
@@ -43,8 +46,8 @@ export default function App() {
 
   const refresh = useCallback(async () => {
     if (remoteMode) return;
-    setResults(await window.akasi.search(query, { ...scopeOpts(), limit: 2000 }));
-  }, [remoteMode, query, scopeOpts]);
+    setResults(await window.akasi.search(query, { ...scopeOpts(), sort, limit: 2000 }));
+  }, [remoteMode, query, scopeOpts, sort]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -233,6 +236,14 @@ export default function App() {
             placeholder={placeholder}
           />
           {remoteMode && <button className="go" onClick={() => runRemote(remoteMode)}>Search</button>}
+          {!remoteMode && (
+            <select className="sort-select" value={sort} onChange={(e) => setSort(e.target.value)} title="Sort results">
+              <option value="relevance">Relevance</option>
+              <option value="newest">Newest</option>
+              <option value="duration">Duration</option>
+              <option value="used">Most used</option>
+            </select>
+          )}
           <span className="count">{results.length ? `${results.length.toLocaleString()} results` : ''}</span>
           {busy && <span className="busy">{busy}</span>}
 
