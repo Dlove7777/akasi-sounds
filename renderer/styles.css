@@ -212,6 +212,12 @@ input { font-family: inherit; }
   font-family: var(--ui); cursor: pointer;
 }
 .sort-select:hover, .sort-select:focus { border-color: var(--accent); color: var(--text); }
+.credits-btn {
+  -webkit-app-region: no-drag; background: transparent; border: 1px solid var(--border);
+  border-radius: 7px; color: var(--muted); font-size: 12px; padding: 7px 11px;
+  white-space: nowrap; transition: all .12s;
+}
+.credits-btn:hover { border-color: var(--accent-2); color: var(--accent-2); }
 .row-lic { color: var(--muted-2); font-size: 10px; font-family: var(--mono); text-align: right; letter-spacing: 0.02em; }
 .row-actions { position: relative; display: flex; justify-content: flex-end; gap: 6px; }
 .add-btn {

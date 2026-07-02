@@ -251,6 +251,18 @@ export default function App() {
     window.akasi.startDragMany?.(checkedIds);
   }
 
+  const creditsScope = scope === 'collection' && activeCollectionId
+    ? { collectionId: activeCollectionId, title: `Audio credits — ${collections.find((c) => c.id === activeCollectionId)?.name || 'collection'}` }
+    : scope === 'recent' ? { recentOnly: true, title: 'Audio credits — used sounds' } : null;
+
+  async function exportCredits(clientSafe) {
+    if (!creditsScope || !window.akasi.exportCredits) return;
+    const r = await window.akasi.exportCredits({ ...creditsScope, clientSafe });
+    if (r?.error) setBusy(r.error);
+    else if (r?.path) setBusy(`Exported ${r.count} credits${r.flagged ? ` · ${r.flagged} NC ${r.excluded ? 'excluded' : 'FLAGGED'}` : ''}`);
+    if (r && !r.canceled) setTimeout(() => setBusy(null), 2500);
+  }
+
   async function addToCollection(collectionId, s) {
     await window.akasi.addToCollection(collectionId, s.id);
     setCollections(await window.akasi.listCollections());
@@ -305,6 +317,15 @@ export default function App() {
               <option value="duration">Duration</option>
               <option value="used">Most used</option>
             </select>
+          )}
+          {creditsScope && results.length > 0 && (
+            <button
+              className="credits-btn"
+              title="Export an attribution manifest (.md + .csv) for this scope — ⌥-click for client-safe (excludes CC-BY-NC)"
+              onClick={(e) => exportCredits(e.altKey)}
+            >
+              ⎙ Credits
+            </button>
           )}
           <span className="count">{results.length ? `${results.length.toLocaleString()} results` : ''}</span>
           {busy && <span className="busy">{busy}</span>}

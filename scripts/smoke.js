@@ -119,6 +119,25 @@ const ok = (label, cond, extra = '') => {
   ok('addManyToCollection adds all (dupes ignored)', db.listCollections().find((c) => c.id === batchCol)?.count === allIds.length);
   db.deleteCollection(batchCol);
 
+  // 2e. Credits manifest — the licensing deliverable
+  const { buildManifest, classifyLicense } = require('../src/credits');
+  ok('classifyLicense maps the license zoo', classifyLicense('http://creativecommons.org/licenses/by/4.0/') === 'cc-by' &&
+     classifyLicense('http://creativecommons.org/licenses/by-nc/3.0/') === 'cc-by-nc' &&
+     classifyLicense('http://creativecommons.org/publicdomain/zero/1.0/') === 'cc0' &&
+     classifyLicense('ACE-Step 1.5 / Apache-2.0') === 'generated' && classifyLicense('local') === 'local');
+  const creditRows = [
+    { name: 'a.wav', source: 'local', license: 'local' },
+    { name: 'b.wav', source: 'freesound', license: 'http://creativecommons.org/licenses/by/4.0/', attribution: '"b" by user (freesound.org/s/1)' },
+    { name: 'c.wav', source: 'freesound', license: 'http://creativecommons.org/licenses/by-nc/3.0/', attribution: '"c" by other (freesound.org/s/2)' },
+    { name: 'd.wav', source: 'generate', license: 'ACE-Step 1.5 / Apache-2.0', attribution: 'Generated · ACE-Step 1.5' },
+  ];
+  const full = buildManifest(creditRows, { title: 'Test credits' });
+  ok('Manifest carries required attribution', full.markdown.includes('"b" by user') && full.markdown.includes('attribution required'));
+  ok('Manifest flags NC as not client-safe', full.flagged.length === 1 && /INCLUDED — not client-safe/.test(full.markdown));
+  const safe = buildManifest(creditRows, { clientSafe: true });
+  ok('Client-safe export excludes NC', safe.count === 3 && safe.excluded && /EXCLUDED from this manifest/.test(safe.markdown));
+  ok('CSV has header + included rows only', safe.csv.split('\n').length === 4);
+
   // 3. Live Freesound search (network + key)
   let remote = null;
   if (freesound.available()) {

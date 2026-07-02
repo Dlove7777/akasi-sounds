@@ -18,6 +18,7 @@ protocol.registerSchemesAsPrivileged([
 const mediaUrl = (absPath) => `akmedia://audio/${encodeURIComponent(absPath)}`;
 
 const { openDb } = require('../src/db');
+const { buildManifest } = require('../src/credits');
 const providers = require('../src/providers');
 const freesound = require('../src/providers/freesound');
 const { scanFolder } = require('../src/indexer');
@@ -104,6 +105,27 @@ ipcMain.handle('col:delete', (_e, id) => db.deleteCollection(id));
 ipcMain.handle('col:add', (_e, { collectionId, soundId }) => db.addToCollection(collectionId, soundId));
 ipcMain.handle('col:remove', (_e, { collectionId, soundId }) => db.removeFromCollection(collectionId, soundId));
 ipcMain.handle('col:forSound', (_e, soundId) => db.collectionsForSound(soundId));
+
+/* ------------------------- IPC: credits export ------------------------ */
+
+// Export an attribution manifest (.md + .csv) for a collection or the used-set.
+// clientSafe excludes CC-BY-NC material and flags it instead of shipping it.
+ipcMain.handle('credits:export', async (_e, { collectionId, recentOnly, clientSafe, title }) => {
+  const rows = db.search('', collectionId ? { collectionId, limit: 2000 } : { recentOnly: true, limit: 2000 });
+  if (!rows.length) return { error: 'Nothing to export in this scope.' };
+  const manifest = buildManifest(rows, { title: title || 'Audio credits — Akasi Sounds', clientSafe });
+  const r = await dialog.showSaveDialog(win, {
+    title: 'Export credits manifest',
+    defaultPath: path.join(app.getPath('documents'), 'audio-credits.md'),
+    filters: [{ name: 'Markdown', extensions: ['md'] }],
+  });
+  if (r.canceled || !r.filePath) return { canceled: true };
+  fs.writeFileSync(r.filePath, manifest.markdown);
+  const csvPath = r.filePath.replace(/\.md$/, '') + '.csv';
+  fs.writeFileSync(csvPath, manifest.csv);
+  shell.showItemInFolder(r.filePath);
+  return { path: r.filePath, csvPath, count: manifest.count, flagged: manifest.flagged.length, excluded: manifest.excluded };
+});
 
 ipcMain.handle('folders:add', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'multiSelections'] });

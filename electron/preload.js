@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('akasi', {
   setFavoriteMany: (ids, on) => ipcRenderer.invoke('lib:favMany', { ids, on }),
   addManyToCollection: (collectionId, ids) => ipcRenderer.invoke('col:addMany', { collectionId, ids }),
   startDragMany: (ids) => ipcRenderer.send('drag:startMany', ids),
+  exportCredits: (opts) => ipcRenderer.invoke('credits:export', opts || {}),
   remoteSearch: (provider, query, page) => ipcRenderer.invoke('remote:search', { provider, query, page }),
   resolveAudio: (id, fx) => ipcRenderer.invoke('audio:resolve', id, fx),
   peaks: (id) => ipcRenderer.invoke('audio:peaks', id),

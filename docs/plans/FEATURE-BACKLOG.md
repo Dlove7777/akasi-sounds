@@ -70,8 +70,11 @@ preview-verify if UI-visible → commit + push `main` → check item off with a 
   (90ms-throttled seeks, URL cache); amber scrub line on the row canvas; dock
   pauses itself on `akasi:scrub-start`. Alt-gated so casual mousing stays silent.
   Verified pixel-level in preview (line draws at 60% hover, clears on leave).
-- [ ] **11. Credits/attribution export** — per-collection Markdown/CSV manifest;
-  flag CC-BY-NC as non-client-safe (plan U12).
+- [x] **11. Credits/attribution export** — ✅ 2026-07-02. `src/credits.js` classifies
+  the license zoo (local/cc0/cc-by/cc-by-nc/generated/other), builds grouped Markdown
+  + CSV; ⎙ Credits button appears in collection/Recent scopes (⌥-click = client-safe:
+  CC-BY-NC excluded + loudly noted; default flags NC as not-client-safe). Save dialog
+  → .md + .csv → reveal in Finder. 49/49 incl. exclusion + attribution assertions.
 - [ ] **12. Tabbed / locked searches** — search tabs scoped to a collection or scope
   (Soundminer v6 locked tabs).
 

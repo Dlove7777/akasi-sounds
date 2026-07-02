@@ -109,6 +109,7 @@ if (!window.akasi) {
     setFavoriteMany: async (ids, on) => { ids.forEach((sid) => { const d = demo.find((x) => x.id === sid); if (d) d.favorite = on ? 1 : 0; }); return ids.length; },
     addManyToCollection: async (colId, ids) => { (membership[colId] = membership[colId] || new Set()); ids.forEach((sid) => membership[colId].add(sid)); return ids.length; },
     startDragMany: () => {},
+    exportCredits: async () => ({ path: '/mock/audio-credits.md', count: 4, flagged: 1, excluded: false }),
     listFolders: async () => [{ path: '/Users/you/SFX Library' }, { path: '/Users/you/Music/Beds' }],
     addFolders: async () => ({ added: [] }),
     providers: async () => [{ id: 'freesound', label: 'Freesound' }],
