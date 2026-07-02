@@ -189,6 +189,14 @@ export default function App() {
     if (activeCollectionId === id) onScope('library');
     setCollections(await window.akasi.listCollections());
   }
+  async function editMeta(s, fields) {
+    await window.akasi.updateMeta(s.id, fields);
+    setResults((rs) => rs.map((r) => (r.id === s.id ? { ...r, ...fields, bpm: fields.bpm === '' ? null : fields.bpm } : r)));
+    loadMeta(); // kind flips move counts between scopes
+    setBusy('Saved');
+    setTimeout(() => setBusy(null), 900);
+  }
+
   async function addToCollection(collectionId, s) {
     await window.akasi.addToCollection(collectionId, s.id);
     setCollections(await window.akasi.listCollections());
@@ -292,6 +300,7 @@ export default function App() {
             onSelect={cue}
             onToggleFav={toggleFav}
             onAddToCollection={addToCollection}
+            onEdit={editMeta}
           />
         )}
 

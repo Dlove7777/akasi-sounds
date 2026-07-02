@@ -270,6 +270,25 @@ class AkasiDb {
     return this.db.prepare('UPDATE sounds SET peaks = ? WHERE id = ?').run(buf, id).changes;
   }
 
+  /**
+   * Edit index-side metadata (rename/retag/reclassify). Whitelisted fields only —
+   * license/attribution stay provider-authoritative. FTS stays in sync via the
+   * existing UPDATE trigger.
+   */
+  updateMeta(id, fields) {
+    const ALLOWED = ['name', 'tags', 'kind', 'artist', 'album', 'genre', 'bpm', 'year'];
+    const sets = [];
+    const params = { id };
+    for (const k of ALLOWED) {
+      if (fields[k] !== undefined) {
+        sets.push(`${k} = @${k}`);
+        params[k] = fields[k] === '' ? null : fields[k];
+      }
+    }
+    if (!sets.length) return 0;
+    return this.db.prepare(`UPDATE sounds SET ${sets.join(', ')} WHERE id = @id`).run(params).changes;
+  }
+
   /** Autocomplete: indexed terms starting with `prefix`, most frequent first. */
   suggest(prefix, limit = 8) {
     const p = String(prefix || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');

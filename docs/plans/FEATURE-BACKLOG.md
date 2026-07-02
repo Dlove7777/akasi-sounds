@@ -47,9 +47,10 @@ preview-verify if UI-visible → commit + push `main` → check item off with a 
   sidebar (last-used order, live count), sort dropdown (relevance/newest/duration/
   most-used) wired through db.search ORDER BY map, amber ×N badges on used rows.
   36/36 smoke; verified in preview (most-used sort surfaces ×5 first).
-- [ ] **7. Inline metadata editing** — rename, edit tags, set kind (sfx/music) from a
-  row context menu / inspector; writes back to the index (not the file) so licensing
-  fields stay authoritative. (SoundQ metadata editing, index-side.)
+- [x] **7. Inline metadata editing** — ✅ 2026-07-02. ✎ on row hover opens an anchored
+  editor (name/tags/kind toggle + artist/genre/BPM when music); Enter saves, Esc
+  cancels; whitelisted `updateMeta` keeps license/attribution provider-authoritative;
+  FTS syncs via existing triggers; kind flips move scope counts live. 40/40.
 
 ## P3 — depth & polish
 

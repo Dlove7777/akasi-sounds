@@ -72,10 +72,66 @@ const BADGE = { local: 'local', freesound: 'free', generate: 'gen' };
  * surface artist · genre and BPM; sfx rows surface tags and duration. The star and
  * the add-to-collection affordance are always reachable.
  */
+/** Anchored inline editor — rename/retag/reclassify without leaving the list. */
+function MetaEditor({ sound, onSave, onClose }) {
+  const [f, setF] = useState({
+    name: sound.name || '',
+    tags: sound.tags || '',
+    kind: sound.kind || 'sfx',
+    artist: sound.artist || '',
+    genre: sound.genre || '',
+    bpm: sound.bpm || '',
+  });
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const save = () => {
+    onSave({
+      name: f.name.trim() || sound.name,
+      tags: f.tags.trim(),
+      kind: f.kind,
+      artist: f.artist.trim(),
+      genre: f.genre.trim(),
+      bpm: f.bpm === '' ? '' : +f.bpm || '',
+    });
+    onClose();
+  };
+  const onKey = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save(); }
+    if (e.key === 'Escape') onClose();
+    e.stopPropagation();
+  };
+  return (
+    <div className="meta-editor" onClick={(e) => e.stopPropagation()} onKeyDown={onKey}>
+      <label>Name<input autoFocus value={f.name} onChange={set('name')} /></label>
+      <label>Tags<input value={f.tags} onChange={set('tags')} placeholder="space separated" /></label>
+      <div className="meta-row">
+        <label className="meta-kind">Kind
+          <div className="kind-toggle">
+            {['sfx', 'music'].map((k) => (
+              <button key={k} className={f.kind === k ? 'on' : ''} onClick={() => setF({ ...f, kind: k })}>{k}</button>
+            ))}
+          </div>
+        </label>
+        {f.kind === 'music' && (
+          <>
+            <label>Artist<input value={f.artist} onChange={set('artist')} /></label>
+            <label>Genre<input value={f.genre} onChange={set('genre')} /></label>
+            <label className="meta-bpm">BPM<input type="number" value={f.bpm} onChange={set('bpm')} /></label>
+          </>
+        )}
+      </div>
+      <div className="meta-actions">
+        <button className="meta-save" onClick={save}>Save ⏎</button>
+        <button className="meta-cancel" onClick={onClose}>esc</button>
+      </div>
+    </div>
+  );
+}
+
 export default function SoundRow({
-  sound, height, selected, musicColumns, collections, onSelect, onToggleFav, onAddToCollection,
+  sound, height, selected, musicColumns, collections, onSelect, onToggleFav, onAddToCollection, onEdit,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const s = sound;
   const isMusic = musicColumns && s.kind === 'music';
 
@@ -108,12 +164,26 @@ export default function SoundRow({
       <span className="row-lic">{shortLicense(s.license)}</span>
       <div className="row-actions">
         <button
+          className="add-btn edit-btn"
+          title="Edit metadata"
+          onClick={(e) => { e.stopPropagation(); setEditing((v) => !v); setMenuOpen(false); }}
+        >
+          ✎
+        </button>
+        <button
           className="add-btn"
           title="Add to collection"
-          onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
+          onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); setEditing(false); }}
         >
           ＋
         </button>
+        {editing && (
+          <MetaEditor
+            sound={s}
+            onClose={() => setEditing(false)}
+            onSave={(fields) => onEdit(s, fields)}
+          />
+        )}
         {menuOpen && (
           <div className="add-menu" onClick={(e) => e.stopPropagation()}>
             {collections.length === 0 && <div className="add-empty">No collections yet</div>}

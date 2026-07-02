@@ -91,6 +91,7 @@ ipcMain.handle('lib:favorite', (_e, id) => db.toggleFavorite(id));
 ipcMain.handle('lib:folders', () => db.listFolders());
 ipcMain.handle('providers:list', () => providers.availableProviders());
 ipcMain.handle('lib:suggest', (_e, prefix) => db.suggest(prefix));
+ipcMain.handle('lib:update', (_e, { id, fields }) => db.updateMeta(id, fields || {}));
 
 /* -------------------------- IPC: collections -------------------------- */
 

@@ -75,6 +75,15 @@ const ok = (label, cond, extra = '') => {
      `${byDur[0].duration}s → ${byDur[byDur.length - 1].duration}s`);
   ok('Sort by most-used puts used row first', db.search('', { sort: 'used' })[0].id === id);
 
+  // 1d. Inline metadata editing keeps FTS + scopes in sync
+  db.updateMeta(id, { name: 'renamed_boom.wav', tags: 'boom explosion cinematic' });
+  ok('updateMeta: old tag no longer matches', db.search('thunder').length === 0);
+  ok('updateMeta: new tag searchable via FTS', db.search('boom').some((r) => r.id === id));
+  db.updateMeta(id, { kind: 'music', genre: 'Trailer' });
+  ok('updateMeta: kind flip lands in Music scope', db.search('', { kind: 'music' }).some((r) => r.id === id));
+  db.updateMeta(id, { kind: 'sfx', genre: '', name: 'thunder_clap.wav', tags: 'thunder storm weather' }); // restore for later tests
+  ok('updateMeta: empty string clears field to NULL', db.getSound(id).genre === null);
+
   // 2b. Music kind + Music scope
   db.upsertMany([
     { source: 'local', source_id: '/m/bed.wav', name: 'Cinematic Bed.wav', kind: 'music', artist: 'Akasi Studio', genre: 'Cinematic', bpm: 90, tags: 'cinematic bed akasi studio' },

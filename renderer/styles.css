@@ -148,7 +148,7 @@ input { font-family: inherit; }
 
 .row {
   display: grid;
-  grid-template-columns: 28px 46px minmax(0, 1.1fr) 104px minmax(0, 0.9fr) 66px 54px 28px;
+  grid-template-columns: 28px 46px minmax(0, 1.1fr) 104px minmax(0, 0.9fr) 66px 54px 52px;
   align-items: center; gap: 11px; padding: 0 14px 0 10px;
   font-size: 13px; cursor: default; border-bottom: 1px solid var(--border-soft);
   position: relative;
@@ -180,7 +180,7 @@ input { font-family: inherit; }
 }
 .sort-select:hover, .sort-select:focus { border-color: var(--accent); color: var(--text); }
 .row-lic { color: var(--muted-2); font-size: 10px; font-family: var(--mono); text-align: right; letter-spacing: 0.02em; }
-.row-actions { position: relative; display: flex; justify-content: center; }
+.row-actions { position: relative; display: flex; justify-content: flex-end; gap: 6px; }
 .add-btn {
   background: none; border: 0; color: #363c4e; font-size: 15px; line-height: 1; padding: 0;
   opacity: 0; transition: opacity .1s, color .1s;
@@ -195,6 +195,39 @@ input { font-family: inherit; }
 .add-item { text-align: left; background: none; border: 0; color: var(--text); font-size: 12.5px; padding: 7px 9px; border-radius: 5px; }
 .add-item:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
 .add-empty { color: var(--muted-2); font-size: 12px; padding: 7px 9px; font-style: italic; }
+
+/* ---------------- Inline metadata editor ---------------- */
+.meta-editor {
+  position: absolute; right: 0; top: 26px; z-index: 30; width: 320px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 16px 44px rgba(0,0,0,0.55); padding: 12px; display: flex;
+  flex-direction: column; gap: 8px; cursor: default;
+}
+.meta-editor label {
+  display: flex; flex-direction: column; gap: 4px; font-size: 10px;
+  text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted-2); font-weight: 600;
+}
+.meta-editor input {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-size: 12.5px; padding: 6px 8px; outline: none;
+  font-family: var(--ui); text-transform: none; letter-spacing: normal;
+}
+.meta-editor input:focus { border-color: var(--accent); }
+.meta-row { display: flex; gap: 8px; align-items: flex-end; }
+.meta-row label { flex: 1; min-width: 0; }
+.meta-bpm { max-width: 64px; }
+.kind-toggle { display: flex; gap: 3px; }
+.kind-toggle button {
+  flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 5px;
+  color: var(--muted); font-size: 10.5px; font-family: var(--mono); padding: 5px 8px;
+}
+.kind-toggle button.on { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.meta-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; }
+.meta-save {
+  background: var(--accent); border: 0; border-radius: 6px; color: #06120f;
+  font-size: 12px; font-weight: 650; padding: 6px 14px;
+}
+.meta-cancel { background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-size: 11px; font-family: var(--mono); padding: 5px 9px; }
 
 /* =========================== Waveform dock =========================== */
 .dock { border-top: 1px solid var(--border); background: linear-gradient(180deg, var(--panel) 0%, #101220 100%); padding: 14px 18px; }

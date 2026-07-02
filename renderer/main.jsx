@@ -105,6 +105,7 @@ if (!window.akasi) {
       bySource: [],
     }),
     toggleFavorite: async (sid) => { const d = demo.find((x) => x.id === sid); if (d) d.favorite = d.favorite ? 0 : 1; return 1; },
+    updateMeta: async (sid, fields) => { const d = demo.find((x) => x.id === sid); if (d) Object.assign(d, fields); return 1; },
     listFolders: async () => [{ path: '/Users/you/SFX Library' }, { path: '/Users/you/Music/Beds' }],
     addFolders: async () => ({ added: [] }),
     providers: async () => [{ id: 'freesound', label: 'Freesound' }],
