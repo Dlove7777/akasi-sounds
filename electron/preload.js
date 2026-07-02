@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('akasi', {
   remoteSearch: (provider, query, page) => ipcRenderer.invoke('remote:search', { provider, query, page }),
   resolveAudio: (id, fx) => ipcRenderer.invoke('audio:resolve', id, fx),
   peaks: (id) => ipcRenderer.invoke('audio:peaks', id),
+  segments: (id) => ipcRenderer.invoke('audio:segments', id),
   startDrag: (id, selection) => ipcRenderer.send('drag:start', { id, selection }),
   reveal: (p) => ipcRenderer.invoke('reveal', p),
 

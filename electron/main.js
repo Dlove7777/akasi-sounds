@@ -156,6 +156,19 @@ ipcMain.handle('audio:peaks', async (_e, id) => {
   });
 });
 
+// Segments — non-silent regions of a file (variation packs). Session-cached.
+const segCache = new Map();
+ipcMain.handle('audio:segments', async (_e, id) => {
+  if (segCache.has(id)) return segCache.get(id);
+  const s = db.getSound(id);
+  if (!s) return [];
+  const file = [s.path, s.cached_path].find((p) => p && fs.existsSync(p));
+  if (!file) return [];
+  const segs = await withPeaksSlot(() => audio.detectSegments(file));
+  segCache.set(id, segs || []);
+  return segs || [];
+});
+
 // Return a playable URL for the renderer <audio> (caches remote previews).
 // fx.reverse → serve an ffmpeg-reversed temp render (cached per sound) so the
 // audition is honest: what you hear reversed is exactly what the drag will bake.

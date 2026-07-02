@@ -35,6 +35,29 @@ export default function Waveform({
   const wiredRef = useRef(false);
   const [loopOn, setLoopOn] = useState(() => localStorage.getItem('akasi.loop') === '1');
   const [muted, setMuted] = useState(false);
+  const [segs, setSegs] = useState(null);
+  const [activeSeg, setActiveSeg] = useState(-1);
+
+  // Segments (variation packs). Skipped when reversed — chip times describe the
+  // forward timeline and would lie against a reversed preview.
+  useEffect(() => {
+    let alive = true;
+    setSegs(null); setActiveSeg(-1);
+    if (!sound || fx?.reverse || !window.akasi.segments) return;
+    window.akasi.segments(sound.id).then((s) => {
+      if (alive && Array.isArray(s) && s.length > 1) setSegs(s);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [sound?.id, fx?.reverse]);
+
+  function selectSegment(i) {
+    const seg = segs?.[i];
+    if (!seg) return;
+    setActiveSeg(i);
+    setSel({ start: seg.start, end: seg.end });
+    const a = audioRef.current;
+    if (a) { a.currentTime = seg.start; a.play().then(() => setPlaying(true)).catch(() => {}); }
+  }
 
   // Loop + mute are listening-mode preferences — they survive sound changes.
   useEffect(() => {
@@ -101,7 +124,7 @@ export default function Waveform({
   }, [sound?.id, fx?.reverse]);
 
   // Draw
-  useEffect(() => { draw(canvasRef.current, peaks, pos, duration, sel, fades); }, [peaks, pos, duration, sel, fades]);
+  useEffect(() => { draw(canvasRef.current, peaks, pos, duration, sel, fades, segs); }, [peaks, pos, duration, sel, fades, segs]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -116,6 +139,7 @@ export default function Waveform({
       }
       if (e.key === 'l' || e.key === 'L') { setLoopOn((v) => !v); return; }
       if (e.key === 'm' || e.key === 'M') { setMuted((v) => !v); return; }
+      if (segs && /^[1-9]$/.test(e.key)) { selectSegment(+e.key - 1); return; }
       // Functional updates — rapid key runs must not clobber each other.
       if (e.key === 'r' || e.key === 'R') { onFxChange((f) => ({ ...f, reverse: !f.reverse })); return; }
       if (e.key === '[') { onFxChange((f) => ({ ...f, semi: Math.max(-12, (f.semi || 0) - 1) })); return; }
@@ -124,7 +148,18 @@ export default function Waveform({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [sound, playing, fx, onFxChange, duration]);
+  }, [sound, playing, fx, onFxChange, duration, segs]);
+
+  // Selection-aware transport: with a crop/segment active, stop at its end —
+  // or cycle back to its start when LOOP is on.
+  function onTime(e) {
+    const t = e.target.currentTime;
+    setPos(t);
+    if (sel && t >= sel.end - 0.015) {
+      if (loopOn) { e.target.currentTime = sel.start; }
+      else { e.target.pause(); setPlaying(false); }
+    }
+  }
 
   function toggle() {
     const a = audioRef.current;
@@ -144,7 +179,7 @@ export default function Waveform({
     const rect = canvasRef.current.getBoundingClientRect();
     return Math.max(0, Math.min(duration, ((e.clientX - rect.left) / rect.width) * duration));
   }
-  function onDown(e) { dragRef.current = xToTime(e); setSel({ start: dragRef.current, end: dragRef.current }); }
+  function onDown(e) { dragRef.current = xToTime(e); setActiveSeg(-1); setSel({ start: dragRef.current, end: dragRef.current }); }
   function onMove(e) {
     if (dragRef.current == null) return;
     const t = xToTime(e);
@@ -177,7 +212,7 @@ export default function Waveform({
 
   return (
     <div className="wf">
-      <audio ref={audioRef} src={src} onTimeUpdate={(e) => setPos(e.target.currentTime)}
+      <audio ref={audioRef} src={src} onTimeUpdate={onTime}
              onCanPlay={onCanPlay}
              onEnded={() => setPlaying(false)} onLoadedMetadata={(e) => setDuration(e.target.duration || duration)} />
       <button className={`wf-play ${playing ? 'on' : ''}`} onClick={toggle} title="Play / pause (Space)">
@@ -197,6 +232,16 @@ export default function Waveform({
           </span>
           <span className="wf-sel">{selLabel}</span>
         </div>
+        {segs && (
+          <div className="wf-segs">
+            <span className="wf-segs-label">{segs.length} takes</span>
+            {segs.slice(0, 24).map((g, i) => (
+              <button key={i} className={`seg-chip ${activeSeg === i ? 'on' : ''}`}
+                title={`${g.start.toFixed(2)}–${g.end.toFixed(2)}s (key ${i + 1})`}
+                onClick={() => selectSegment(i)}>{i + 1}</button>
+            ))}
+          </div>
+        )}
         <canvas
           ref={canvasRef} className="wf-canvas" width={900} height={96}
           onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
@@ -225,7 +270,7 @@ export default function Waveform({
             <button className="wf-clear" title="Reset FX (0)"
               onClick={() => onFxChange({ semi: 0, reverse: false, gainDb: 0 })}>reset</button>
           )}
-          {sel && <button className="wf-clear" onClick={() => setSel(null)}>clear crop</button>}
+          {sel && <button className="wf-clear" onClick={() => { setSel(null); setActiveSeg(-1); }}>clear crop</button>}
         </div>
       </div>
       <div className="wf-drag" draggable onDragStart={beginDrag} title="Drag into your timeline">
@@ -248,12 +293,26 @@ function computePeaks(audioBuffer, buckets) {
   return peaks;
 }
 
-function draw(canvas, peaks, pos, duration, sel, fades) {
+function draw(canvas, peaks, pos, duration, sel, fades, segs) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   const { width: w, height: h } = canvas;
   ctx.clearRect(0, 0, w, h);
   const mid = h / 2;
+
+  // segment boundary ticks
+  if (segs && duration) {
+    ctx.strokeStyle = 'rgba(127,134,156,0.35)';
+    ctx.setLineDash([3, 4]);
+    for (const g of segs) {
+      for (const t of [g.start, g.end]) {
+        if (t <= 0.01 || t >= duration - 0.01) continue;
+        const x = (t / duration) * w;
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+      }
+    }
+    ctx.setLineDash([]);
+  }
 
   // selection band
   if (sel && duration) {

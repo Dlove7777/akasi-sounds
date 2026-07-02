@@ -156,4 +156,44 @@ function pcmPeaks(input, buckets = 160) {
   });
 }
 
-module.exports = { probe, render, pcmPeaks, FFMPEG, FFPROBE };
+/**
+ * Detect non-silent segments (Soundly-style "Segments" — variation files often pack
+ * several takes separated by silence). Runs silencedetect and inverts the silence
+ * windows into sound regions. Returns [{start, end}] — a single full-length region
+ * means "no meaningful split" (UI hides the chips).
+ */
+function detectSegments(input, opts = {}) {
+  const noise = opts.noiseDb ?? -35; // dB threshold
+  const minSilence = opts.minSilence ?? 0.25; // s of quiet that splits takes
+  const minSeg = opts.minSeg ?? 0.12; // discard blips shorter than this
+  return new Promise(async (resolve) => {
+    const meta = await probe(input);
+    const dur = meta.duration;
+    if (!dur) return resolve([]);
+    const p = spawn(FFMPEG, ['-i', input, '-af', `silencedetect=noise=${noise}dB:d=${minSilence}`, '-f', 'null', '-']);
+    let err = '';
+    p.stderr.on('data', (d) => (err += d));
+    p.on('error', () => resolve([{ start: 0, end: dur }]));
+    p.on('close', () => {
+      const silences = [];
+      const re = /silence_start:\s*([\d.]+)[\s\S]*?silence_end:\s*([\d.]+)/g;
+      let m;
+      while ((m = re.exec(err))) silences.push({ start: parseFloat(m[1]), end: parseFloat(m[2]) });
+      // Trailing silence may report a start with no end — close it at EOF.
+      const lastStart = err.match(/silence_start:\s*([\d.]+)\s*$/m);
+      if (lastStart && (!silences.length || silences[silences.length - 1].end < parseFloat(lastStart[1]))) {
+        silences.push({ start: parseFloat(lastStart[1]), end: dur });
+      }
+      const segs = [];
+      let cursor = 0;
+      for (const s of silences.sort((a, b) => a.start - b.start)) {
+        if (s.start - cursor >= minSeg) segs.push({ start: cursor, end: s.start });
+        cursor = Math.max(cursor, s.end);
+      }
+      if (dur - cursor >= minSeg) segs.push({ start: cursor, end: dur });
+      resolve(segs.length ? segs : [{ start: 0, end: dur }]);
+    });
+  });
+}
+
+module.exports = { probe, render, pcmPeaks, detectSegments, FFMPEG, FFPROBE };

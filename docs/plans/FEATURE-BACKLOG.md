@@ -27,9 +27,12 @@ preview-verify if UI-visible → commit + push `main` → check item off with a 
   `?` in-app cheat-sheet overlay (3 groups, 14 keys, Esc closes). Bonus UX fix: ↓ from
   the search input blurs + jumps into auditioning (typing guard was trapping all keys
   while search was focused — the type-then-arrow flow now works like Soundly).
-- [ ] **4. Segments** — auto-split multi-variation files (ffmpeg `silencedetect`),
-  show segment pips on the dock waveform, click to audition a segment, drag just that
-  segment to the timeline. (Soundly "Segments".)
+- [x] **4. Segments** — ✅ 2026-07-02. `detectSegments()` inverts silencedetect
+  (−35dB/0.25s) into take regions; chips row ("N takes", keys 1–9) auto-crops +
+  plays a take; selection-aware transport stops at take end (or cycles when LOOP on);
+  dashed boundary ticks on the canvas; drag bakes just the take. Session-cached in
+  main; hidden when reversed (chip times describe the forward timeline). Smoke 29/29
+  (synthetic 3-burst pack → exactly 3 regions; continuous audio → 1).
 
 ## P2 — find sounds like a librarian
 

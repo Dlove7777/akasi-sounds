@@ -18,6 +18,7 @@ const GROUPS = [
       ['[ / ]', 'Varispeed pitch ∓1 semitone'],
       ['R', 'Reverse'],
       ['0', 'Reset all FX'],
+      ['1–9', 'Audition segment (variation takes)'],
       ['drag on waveform', 'Crop selection'],
       ['drag corner inward', 'Fade in / out'],
     ],

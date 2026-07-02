@@ -89,6 +89,16 @@ if (!window.akasi) {
     remoteSearch: async (p, q) => ({ count: 0, results: filt(q, { source: p }) }),
     resolveAudio: async () => ({ path: '' }),
     peaks: async (sid) => mkPeaks(sid),
+    segments: async (sid) => {
+      const d = demo.find((x) => x.id === sid);
+      if (!d || sid % 3 !== 0) return []; // every 3rd sound is a "variation pack"
+      const dur = d.duration || 4;
+      const n = 3 + (sid % 3);
+      return Array.from({ length: n }, (_, i) => ({
+        start: (i * dur) / n + 0.05,
+        end: ((i + 1) * dur) / n - 0.08,
+      }));
+    },
     startDrag: () => {},
     reveal: async () => {},
     listCollections: async () => listCollections(),

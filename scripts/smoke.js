@@ -119,6 +119,17 @@ const ok = (label, cond, extra = '') => {
       const loud = await audio.render(cached, { start: 0, end: 1, gainDb: 6, fadeOut: 0.2, outDir: path.join(tmp, 'drops'), name: 'fx_gain' });
       ok('Gain + fade render succeeds', fs.existsSync(loud) && (await audio.probe(loud)).duration > 0.8);
 
+      // 5c. Segment detection: 3 tone bursts split by silence → 3 regions
+      const { execFile: ex } = require('node:child_process');
+      const packFile = path.join(tmp, 'pack.wav');
+      await new Promise((res, rej) => ex(audio.FFMPEG, ['-y', '-f', 'lavfi', '-i',
+        "aevalsrc='if(lt(mod(t,1),0.5),0.8*sin(880*2*PI*t),0)':d=3", packFile],
+        (e) => (e ? rej(e) : res())));
+      const segs = await audio.detectSegments(packFile);
+      ok('detectSegments splits variation pack into 3 takes', segs.length === 3, `${segs.length} segs: ${segs.map((s) => `${s.start.toFixed(2)}-${s.end.toFixed(2)}`).join(' ')}`);
+      const solid = await audio.detectSegments(wav); // the cropped render — continuous audio
+      ok('Continuous audio stays a single segment', solid.length === 1, `${solid.length} seg`);
+
       // 6. Inline-waveform peaks: real decode + DB blob roundtrip
       const peaks = await audio.pcmPeaks(cached);
       const nonzero = peaks ? [...peaks].filter((v) => v > 0).length : 0;
