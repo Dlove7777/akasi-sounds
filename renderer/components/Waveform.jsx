@@ -1,4 +1,32 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { computeSpectrogram } from '../lib/spectrogram.mjs';
+
+// Brand color ramp for the spectrogram: dark → teal → amber → white-hot.
+function specColor(v) {
+  const t = v / 255;
+  if (t < 0.45) { const k = t / 0.45; return [Math.round(10 + 30 * k), Math.round(11 + 90 * k), Math.round(16 + 80 * k), Math.round(255 * (0.25 + 0.75 * k))]; }
+  if (t < 0.8) { const k = (t - 0.45) / 0.35; return [Math.round(40 + 200 * k * 0.85), Math.round(101 + 108 * k * 0.65), Math.round(96 + 0 * k), 255]; } // teal → amber
+  const k = (t - 0.8) / 0.2;
+  return [Math.round(240 + 15 * k), Math.round(180 + 60 * k), Math.round(41 + 160 * k), 255];
+}
+
+/** Render a computed spectrogram to an offscreen canvas (bin 0 at the bottom). */
+function specToCanvas(spec) {
+  const c = document.createElement('canvas');
+  c.width = spec.cols; c.height = spec.bins;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(spec.cols, spec.bins);
+  for (let col = 0; col < spec.cols; col++) {
+    for (let b = 0; b < spec.bins; b++) {
+      const [r, g, bl, a] = specColor(spec.data[col * spec.bins + b]);
+      const y = spec.bins - 1 - b; // low freq at the bottom
+      const p = (y * spec.cols + col) * 4;
+      img.data[p] = r; img.data[p + 1] = g; img.data[p + 2] = bl; img.data[p + 3] = a;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
 
 /**
  * Waveform + transport for the currently-selected sound.
@@ -37,6 +65,22 @@ export default function Waveform({
   const [muted, setMuted] = useState(false);
   const [segs, setSegs] = useState(null);
   const [activeSeg, setActiveSeg] = useState(-1);
+  const [specOn, setSpecOn] = useState(() => localStorage.getItem('akasi.spec') === '1');
+  const [specReady, setSpecReady] = useState(false); // bumps draw when heatmap lands
+  const chanRef = useRef(null); // decoded channel 0, kept for spectrogram
+  const specRef = useRef(null); // offscreen heatmap canvas for the current sound
+
+  useEffect(() => { localStorage.setItem('akasi.spec', specOn ? '1' : '0'); }, [specOn]);
+
+  // Compute the heatmap lazily — only when the view is on and samples are decoded.
+  useEffect(() => {
+    if (!specOn || specRef.current || !chanRef.current) return;
+    const t = setTimeout(() => {
+      const spec = computeSpectrogram(chanRef.current, { fftSize: 512, cols: 440, bins: 96 });
+      if (spec) { specRef.current = specToCanvas(spec); setSpecReady((v) => !v); }
+    }, 10); // let the toggle paint first
+    return () => clearTimeout(t);
+  }, [specOn, sound?.id, peaks]);
 
   // Segments (variation packs). Skipped when reversed — chip times describe the
   // forward timeline and would lie against a reversed preview.
@@ -102,6 +146,7 @@ export default function Waveform({
     let cancelled = false;
     const resume = playing || wantPlayRef.current;
     setPeaks(null); setSel(null); setPos(0); setPlaying(false);
+    chanRef.current = null; specRef.current = null; // new audio → new heatmap
     if (!sound) return;
     if (resume) wantPlayRef.current = true; // keep playing across a reverse flip
     (async () => {
@@ -116,6 +161,7 @@ export default function Waveform({
         const audio = await ctx.decodeAudioData(buf);
         if (cancelled) return;
         setDuration(audio.duration);
+        chanRef.current = audio.getChannelData(0); // retained for the spectrogram
         setPeaks(computePeaks(audio, 900));
         ctx.close();
       } catch { setDuration(sound.duration || 0); /* transport still works if decode fails */ }
@@ -124,7 +170,9 @@ export default function Waveform({
   }, [sound?.id, fx?.reverse]);
 
   // Draw
-  useEffect(() => { draw(canvasRef.current, peaks, pos, duration, sel, fades, segs); }, [peaks, pos, duration, sel, fades, segs]);
+  useEffect(() => {
+    draw(canvasRef.current, peaks, pos, duration, sel, fades, segs, specOn ? specRef.current : null);
+  }, [peaks, pos, duration, sel, fades, segs, specOn, specReady]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -139,6 +187,7 @@ export default function Waveform({
       }
       if (e.key === 'l' || e.key === 'L') { setLoopOn((v) => !v); return; }
       if (e.key === 'm' || e.key === 'M') { setMuted((v) => !v); return; }
+      if (e.key === 's' || e.key === 'S') { setSpecOn((v) => !v); return; }
       if (segs && /^[1-9]$/.test(e.key)) { selectSegment(+e.key - 1); return; }
       // Functional updates — rapid key runs must not clobber each other.
       if (e.key === 'r' || e.key === 'R') { onFxChange((f) => ({ ...f, reverse: !f.reverse })); return; }
@@ -228,6 +277,8 @@ export default function Waveform({
               onClick={() => onAutoPlayChange((v) => !v)}>AUTO</button>
             <button className={`pill ${muted ? 'warn' : ''}`} title="Mute (M)"
               onClick={() => setMuted((v) => !v)}>{muted ? 'MUTED' : 'MUTE'}</button>
+            <button className={`pill ${specOn ? 'on' : ''}`} title="Spectrogram view (S)"
+              onClick={() => setSpecOn((v) => !v)}>SPEC</button>
             <button className="pill ghost" title="Keyboard shortcuts (?)" onClick={onOpenSheet}>?</button>
           </span>
           <span className="wf-sel">{selLabel}</span>
@@ -293,12 +344,18 @@ function computePeaks(audioBuffer, buckets) {
   return peaks;
 }
 
-function draw(canvas, peaks, pos, duration, sel, fades, segs) {
+function draw(canvas, peaks, pos, duration, sel, fades, segs, specCanvas) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   const { width: w, height: h } = canvas;
   ctx.clearRect(0, 0, w, h);
   const mid = h / 2;
+
+  // spectrogram heatmap replaces the bars; overlays still draw on top
+  if (specCanvas) {
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(specCanvas, 0, 0, w, h);
+  }
 
   // segment boundary ticks
   if (segs && duration) {
@@ -323,8 +380,8 @@ function draw(canvas, peaks, pos, duration, sel, fades, segs) {
     ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0, h); ctx.moveTo(x1, 0); ctx.lineTo(x1, h); ctx.stroke();
   }
 
-  // bars
-  if (peaks) {
+  // bars (waveform view only)
+  if (peaks && !specCanvas) {
     const n = peaks.length, bw = w / n;
     for (let i = 0; i < n; i++) {
       const t = (i / n) * duration;
@@ -333,7 +390,7 @@ function draw(canvas, peaks, pos, duration, sel, fades, segs) {
       const bh = Math.max(1, peaks[i] * (h * 0.86));
       ctx.fillRect(i * bw, mid - bh / 2, Math.max(1, bw - 0.6), bh);
     }
-  } else {
+  } else if (!specCanvas) {
     ctx.fillStyle = '#2a2f3a';
     ctx.fillRect(0, mid - 1, w, 2);
   }

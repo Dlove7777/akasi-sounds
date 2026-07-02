@@ -172,6 +172,34 @@ const ok = (label, cond, extra = '') => {
     }
   }
 
+  // 7. Spectrogram DSP (renderer lib, imported dynamically — it's ESM)
+  try {
+    const { pathToFileURL } = require('node:url');
+    const specMod = await import(pathToFileURL(path.join(__dirname, '..', 'renderer', 'lib', 'spectrogram.mjs')).href);
+    // 2s @ 8kHz: first second 200Hz, second second 3kHz — energy must move UP in frequency.
+    const sr = 8000, N = sr * 2;
+    const sig = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const f = i < N / 2 ? 200 : 3000;
+      sig[i] = Math.sin((2 * Math.PI * f * i) / sr);
+    }
+    const spec = specMod.computeSpectrogram(sig, { fftSize: 256, cols: 64, bins: 128 });
+    const domBin = (col) => {
+      let best = 0, bi = 0;
+      for (let b = 0; b < spec.bins; b++) {
+        const v = spec.data[col * spec.bins + b];
+        if (v > best) { best = v; bi = b; }
+      }
+      return bi;
+    };
+    const early = domBin(8), late = domBin(spec.cols - 8);
+    // Expected bins: 200Hz → ~6, 3000Hz → ~96 (bin ≈ f*fftSize/sr)
+    ok('Spectrogram: dominant bin tracks frequency', early >= 4 && early <= 9 && late >= 90 && late <= 102,
+       `200Hz→bin ${early}, 3kHz→bin ${late}`);
+  } catch (e) {
+    ok('Spectrogram DSP', false, e.message);
+  }
+
   db.close();
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log(`\n${pass} passed, ${fail} failed`);

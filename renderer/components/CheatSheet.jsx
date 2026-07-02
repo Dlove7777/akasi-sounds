@@ -10,6 +10,7 @@ const GROUPS = [
       ['L', 'Loop playback'],
       ['A', 'Auto-play on select'],
       ['M', 'Mute'],
+      ['S', 'Spectrogram view'],
     ],
   },
   {

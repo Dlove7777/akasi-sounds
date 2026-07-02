@@ -54,8 +54,12 @@ preview-verify if UI-visible → commit + push `main` → check item off with a 
 
 ## P3 — depth & polish
 
-- [ ] **8. Spectrogram toggle in the dock** — Web Audio FFT → canvas heatmap behind the
-  waveform (Soundly Spectrogram View); toggle with `S`.
+- [x] **8. Spectrogram toggle in the dock** — ✅ 2026-07-02. Pure-JS STFT
+  (`renderer/lib/spectrogram.mjs`: radix-2 FFT, Hann, 96 log-spaced bins, dB-normalized)
+  over the already-decoded buffer; brand heatmap (dark→teal→amber) composited under
+  selection/playhead/segment overlays; SPEC pill + `S` key, persisted. DSP verified in
+  smoke: 200Hz→bin 6, 3kHz→bin 96 (theory 6.4/96). 41/41. Gotcha: `.js` ESM can't be
+  dynamic-imported under `"type":"commonjs"` → renamed `.mjs`.
 - [ ] **9. Multi-select batch ops** — shift/cmd-click rows → favorite, add-to-collection,
   drag several as one multi-file native drag.
 - [ ] **10. Waveform hover-scrub on rows** — hover a row's mini waveform to preview from
