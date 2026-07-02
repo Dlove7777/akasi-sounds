@@ -91,7 +91,37 @@ input { font-family: inherit; }
 .mock-badge { margin-top: 5px; color: var(--accent-2); font-size: 10.5px; letter-spacing: 0.04em; }
 
 /* ============================== Main ============================== */
-.main { display: grid; grid-template-rows: auto auto 1fr auto; min-width: 0; min-height: 0; position: relative; }
+.main { display: grid; grid-template-rows: auto auto auto 1fr auto; min-width: 0; min-height: 0; position: relative; }
+
+/* ---------------- Filter bar ---------------- */
+.filterbar {
+  display: flex; align-items: center; gap: 6px; padding: 7px 18px;
+  border-bottom: 1px solid var(--border-soft); overflow-x: auto; scrollbar-width: none;
+}
+.filterbar::-webkit-scrollbar { display: none; }
+.fb-group { display: inline-flex; gap: 4px; }
+.fb-sep { width: 1px; height: 14px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
+.fb-chip {
+  background: transparent; border: 1px solid var(--border); border-radius: 20px;
+  color: var(--muted-2); font-size: 10.5px; padding: 3.5px 10px; white-space: nowrap;
+  transition: all .1s; font-family: var(--mono);
+}
+.fb-chip:hover { border-color: var(--muted); color: var(--muted); }
+.fb-chip.on { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 11%, transparent); }
+.fb-select {
+  background: transparent; border: 1px solid var(--border); border-radius: 20px;
+  color: var(--muted-2); font-size: 10.5px; padding: 3px 8px; outline: none; cursor: pointer;
+  font-family: var(--mono); max-width: 130px;
+}
+.fb-select:hover { border-color: var(--accent); color: var(--accent); }
+.fb-clear { background: none; border: 0; color: var(--accent-2); font-size: 10.5px; font-family: var(--mono); }
+
+.ai-badge {
+  font-size: 9px; font-family: var(--mono); font-weight: 700; letter-spacing: 0.08em;
+  color: var(--gen); border: 1px solid color-mix(in srgb, var(--gen) 55%, transparent);
+  background: color-mix(in srgb, var(--gen) 13%, transparent);
+  border-radius: 4px; padding: 3px 6px; white-space: nowrap;
+}
 
 /* ---------------- Locked search tabs ---------------- */
 .tabs {
@@ -230,6 +260,7 @@ input { font-family: inherit; }
 .badge.freesound { color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
 .badge.generate { color: var(--gen); background: color-mix(in srgb, var(--gen) 15%, transparent); }
 .row-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 450; }
+.sem-dot { color: var(--gen); font-weight: 700; }
 .row-wave { width: 104px; height: 26px; display: block; opacity: 0.9; }
 .row-sub { color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-num { color: var(--muted); font-size: 11.5px; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }

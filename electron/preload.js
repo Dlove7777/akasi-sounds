@@ -14,6 +14,13 @@ contextBridge.exposeInMainWorld('akasi', {
   addManyToCollection: (collectionId, ids) => ipcRenderer.invoke('col:addMany', { collectionId, ids }),
   startDragMany: (ids) => ipcRenderer.send('drag:startMany', ids),
   exportCredits: (opts) => ipcRenderer.invoke('credits:export', opts || {}),
+
+  // AI
+  aiStatus: () => ipcRenderer.invoke('ai:status'),
+  analyzeLibrary: () => ipcRenderer.invoke('analyze:run'),
+  genres: () => ipcRenderer.invoke('lib:genres'),
+  onAnalyzeProgress: (cb) => ipcRenderer.on('analyze:progress', (_e, d) => cb(d)),
+  onAiReady: (cb) => ipcRenderer.on('ai:ready', () => cb()),
   remoteSearch: (provider, query, page) => ipcRenderer.invoke('remote:search', { provider, query, page }),
   resolveAudio: (id, fx) => ipcRenderer.invoke('audio:resolve', id, fx),
   peaks: (id) => ipcRenderer.invoke('audio:peaks', id),

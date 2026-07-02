@@ -200,9 +200,12 @@ export default function SoundRow({
   const isMusic = musicColumns && s.kind === 'music';
 
   const secondary = isMusic
-    ? [s.artist, s.genre].filter(Boolean).join(' · ')
+    ? [s.artist, s.genre || s.ai_genre, s.vocals === 0 ? 'instr' : s.vocals === 1 ? 'vocals' : null]
+        .filter(Boolean).join(' · ')
     : (s.tags || '').split(/\s+/).filter(Boolean).slice(0, 5).join(' · ');
-  const metaNum = isMusic && s.bpm ? `${Math.round(s.bpm)} BPM` : fmtDur(s.duration);
+  const metaNum = isMusic && s.bpm
+    ? `${Math.round(s.bpm)}${s.key ? ` ${s.key}` : ''}`
+    : fmtDur(s.duration);
 
   return (
     <div
@@ -218,7 +221,10 @@ export default function SoundRow({
         ★
       </button>
       <span className={`badge ${s.source}`}>{BADGE[s.source] || s.source}</span>
-      <span className="row-name" title={s.name}>{s.name}</span>
+      <span className="row-name" title={s.name}>
+        {s._sem ? <span className="sem-dot" title="Matched by sound (AI)">≋ </span> : null}
+        {s.name}
+      </span>
       <RowWave sound={s} selected={selected} />
       <span className="row-sub" title={secondary}>{secondary}</span>
       <span className="row-num">

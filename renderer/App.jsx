@@ -41,6 +41,10 @@ export default function App() {
   const [tabState] = useState(loadTabs); // initial snapshot only
   const [tabs, setTabs] = useState(tabState.tabs);
   const [activeTab, setActiveTab] = useState(Math.min(tabState.active, tabState.tabs.length - 1));
+  const [aiReady, setAiReady] = useState(false);
+  const [aiInstalled, setAiInstalled] = useState(false);
+  const [genreList, setGenreList] = useState([]);
+  const [filters, setFilters] = useState({ dur: null, bpm: null, genre: null, vocals: null });
   const [stats, setStats] = useState({ total: 0, favorites: 0, music: 0 });
   const [providers, setProviders] = useState([]);
   const [folders, setFolders] = useState([]);
@@ -106,13 +110,24 @@ export default function App() {
     return base;
   };
 
+  const DUR_BUCKETS = { short: { durMax: 2 }, medium: { durMin: 2, durMax: 15 }, long: { durMin: 15 } };
+  const BPM_BUCKETS = { slow: { bpmMax: 90 }, mid: { bpmMin: 90, bpmMax: 121 }, fast: { bpmMin: 121 } };
+
   const scopeOpts = useCallback(() => {
-    if (scope === 'favorites') return { favoritesOnly: true };
-    if (scope === 'recent') return { recentOnly: true };
-    if (scope === 'music') return { kind: 'music' };
-    if (scope === 'collection' && activeCollectionId) return { collectionId: activeCollectionId };
-    return {};
-  }, [scope, activeCollectionId]);
+    const base =
+      scope === 'favorites' ? { favoritesOnly: true }
+      : scope === 'recent' ? { recentOnly: true }
+      : scope === 'music' ? { kind: 'music' }
+      : scope === 'collection' && activeCollectionId ? { collectionId: activeCollectionId }
+      : {};
+    return {
+      ...base,
+      ...(filters.dur ? DUR_BUCKETS[filters.dur] : {}),
+      ...(filters.bpm ? BPM_BUCKETS[filters.bpm] : {}),
+      ...(filters.genre ? { genre: filters.genre } : {}),
+      ...(filters.vocals != null ? { vocals: filters.vocals } : {}),
+    };
+  }, [scope, activeCollectionId, filters]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = useCallback(async () => {
     if (remoteMode) return;
@@ -133,7 +148,22 @@ export default function App() {
       setFolders(await window.akasi.listFolders());
     })();
     window.akasi.onDragError?.((msg) => setBusy(`Drag failed: ${msg}`));
+    // AI availability + live analyze progress
+    window.akasi.aiStatus?.().then((s) => { setAiInstalled(!!s?.installed); setAiReady(!!s?.ready); });
+    window.akasi.onAiReady?.(() => { setAiReady(true); setBusy('AI search ready'); setTimeout(() => setBusy(null), 1500); });
+    window.akasi.onAnalyzeProgress?.((p) => setBusy(`Analyzing ${p.done}/${p.total}${p.current ? ` · ${p.current.slice(0, 28)}` : ''}`));
+    window.akasi.genres?.().then((g) => setGenreList(g || []));
   }, [loadMeta]);
+
+  async function runAnalyze() {
+    setBusy('Starting analysis…');
+    const r = await window.akasi.analyzeLibrary();
+    setBusy(r?.error ? r.error : `Analyzed ${r.done} sounds`);
+    setTimeout(() => setBusy(null), 2500);
+    window.akasi.genres?.().then((g) => setGenreList(g || []));
+    refresh();
+    loadMeta();
+  }
 
   // Row click router: plain = audition (clears multi-selection), ⌘/Ctrl = toggle
   // into the checked set, ⇧ = range from the last anchor.
@@ -394,7 +424,13 @@ export default function App() {
               <option value="newest">Newest</option>
               <option value="duration">Duration</option>
               <option value="used">Most used</option>
+              <option value="bpm">BPM</option>
             </select>
+          )}
+          {aiReady && !remoteMode && <span className="ai-badge" title="Semantic AI search active — describe the sound you want">AI</span>}
+          {aiInstalled && !remoteMode && (
+            <button className="credits-btn" title="Analyze library — detect BPM, key, genre, vocals + build the AI search index"
+              onClick={runAnalyze}>⚡ Analyze</button>
           )}
           {creditsScope && results.length > 0 && (
             <button
@@ -436,6 +472,40 @@ export default function App() {
             <span className="syn-hint" title="Thesaurus-expanded search">≈ {synHint.join(' · ')}</span>
           )}
         </div>
+
+        {!remoteMode && (
+          <div className="filterbar">
+            <span className="fb-group">
+              {[['dur', 'short', '<2s'], ['dur', 'medium', '2–15s'], ['dur', 'long', '15s+']].map(([k, v, label]) => (
+                <button key={v} className={`fb-chip ${filters[k] === v ? 'on' : ''}`}
+                  onClick={() => setFilters((f) => ({ ...f, [k]: f[k] === v ? null : v }))}>{label}</button>
+              ))}
+            </span>
+            <span className="fb-sep" />
+            <span className="fb-group">
+              {[['bpm', 'slow', '<90'], ['bpm', 'mid', '90–120'], ['bpm', 'fast', '120+']].map(([k, v, label]) => (
+                <button key={v} className={`fb-chip ${filters[k] === v ? 'on' : ''}`}
+                  onClick={() => setFilters((f) => ({ ...f, [k]: f[k] === v ? null : v }))}>{label} BPM</button>
+              ))}
+            </span>
+            <span className="fb-sep" />
+            <button className={`fb-chip ${filters.vocals === 0 ? 'on' : ''}`}
+              title="Instrumental only (AI-detected)"
+              onClick={() => setFilters((f) => ({ ...f, vocals: f.vocals === 0 ? null : 0 }))}>Instrumental</button>
+            <button className={`fb-chip ${filters.vocals === 1 ? 'on' : ''}`}
+              onClick={() => setFilters((f) => ({ ...f, vocals: f.vocals === 1 ? null : 1 }))}>Vocals</button>
+            {genreList.length > 0 && (
+              <select className="fb-select" value={filters.genre || ''}
+                onChange={(e) => setFilters((f) => ({ ...f, genre: e.target.value || null }))}>
+                <option value="">All genres</option>
+                {genreList.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select>
+            )}
+            {(filters.dur || filters.bpm || filters.genre || filters.vocals != null) && (
+              <button className="fb-clear" onClick={() => setFilters({ dur: null, bpm: null, genre: null, vocals: null })}>clear</button>
+            )}
+          </div>
+        )}
 
         {results.length === 0 ? (
           <div className="empty">

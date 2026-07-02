@@ -4,3 +4,6 @@ renderer/dist/
 .DS_Store
 .env
 dist-app/
+
+venv/
+__pycache__/

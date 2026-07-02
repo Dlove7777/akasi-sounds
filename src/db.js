@@ -94,6 +94,10 @@ const ADDED_COLUMNS = [
   ['bpm', 'REAL'],
   ['year', 'INTEGER'],
   ['peaks', 'BLOB'], // 160-byte waveform envelope for inline row rendering
+  ['key', 'TEXT'], // musical key, e.g. "Cm" (librosa)
+  ['vocals', 'INTEGER'], // 1 = has vocals, 0 = instrumental, NULL = unknown (CLAP)
+  ['ai_genre', 'TEXT'], // CLAP zero-shot genre (embedded-tag genre stays authoritative)
+  ['analyzed_at', 'INTEGER'], // AI/DSP analysis timestamp
 ];
 
 function migrate(db) {
@@ -216,12 +220,19 @@ class AkasiDb {
       filters.push('s.id IN (SELECT sound_id FROM collection_sounds WHERE collection_id = @collectionId)');
       params.collectionId = opts.collectionId;
     }
+    if (opts.bpmMin != null) { filters.push('s.bpm >= @bpmMin'); params.bpmMin = opts.bpmMin; }
+    if (opts.bpmMax != null) { filters.push('s.bpm <= @bpmMax'); params.bpmMax = opts.bpmMax; }
+    if (opts.durMin != null) { filters.push('s.duration >= @durMin'); params.durMin = opts.durMin; }
+    if (opts.durMax != null) { filters.push('s.duration <= @durMax'); params.durMax = opts.durMax; }
+    if (opts.vocals != null) { filters.push('s.vocals = @vocals'); params.vocals = opts.vocals ? 1 : 0; }
+    if (opts.genre) { filters.push('(s.genre = @genre OR s.ai_genre = @genre)'); params.genre = opts.genre; }
 
     const ORDERS = {
       newest: 's.added_at DESC',
       duration: 's.duration ASC NULLS LAST',
       used: 's.use_count DESC, s.last_used_at DESC',
       recent: 's.last_used_at DESC',
+      bpm: 's.bpm ASC NULLS LAST',
     };
     // Recent scope defaults to last-used order; everything else to newest.
     const fallback = opts.recentOnly ? ORDERS.recent : ORDERS.newest;
@@ -306,6 +317,57 @@ class AkasiDb {
     }
     if (!sets.length) return 0;
     return this.db.prepare(`UPDATE sounds SET ${sets.join(', ')} WHERE id = @id`).run(params).changes;
+  }
+
+  /* ---------------------------- AI analysis ---------------------------- */
+
+  /** Write DSP+CLAP analysis results. Embedded-tag genre stays authoritative. */
+  setAnalysis(id, a) {
+    const row = this.getSound(id);
+    if (!row) return 0;
+    return this.db.prepare(
+      `UPDATE sounds SET
+         bpm = COALESCE(bpm, @bpm), key = COALESCE(@key, key),
+         vocals = @vocals, ai_genre = @ai_genre,
+         genre = COALESCE(genre, @ai_genre),
+         kind = COALESCE(@kind, kind),
+         embedding = COALESCE(@embedding, embedding),
+         analyzed_at = @now
+       WHERE id = @id`
+    ).run({
+      id,
+      bpm: a.bpm ?? null,
+      key: a.key ?? null,
+      vocals: a.vocals ?? null,
+      ai_genre: a.ai_genre ?? null,
+      kind: a.kind ?? null,
+      embedding: a.embedding ?? null,
+      now: Date.now(),
+    }).changes;
+  }
+
+  /** Local-file rows not yet analyzed (drives the Analyze Library job). */
+  needAnalysis(limit = 5000) {
+    return this.db.prepare(
+      `SELECT id, name, path, cached_path FROM sounds
+       WHERE analyzed_at IS NULL AND (path IS NOT NULL OR cached_path IS NOT NULL)
+       ORDER BY added_at DESC LIMIT ?`
+    ).all(limit);
+  }
+
+  /** All rows with embeddings — the in-memory semantic index. */
+  allEmbeddings() {
+    return this.db.prepare('SELECT id, embedding FROM sounds WHERE embedding IS NOT NULL').all();
+  }
+
+  /** Distinct genres present (tag + AI) for the filter dropdown. */
+  genres() {
+    return this.db.prepare(
+      `SELECT DISTINCT g FROM (
+         SELECT genre AS g FROM sounds WHERE genre IS NOT NULL
+         UNION SELECT ai_genre FROM sounds WHERE ai_genre IS NOT NULL
+       ) WHERE g != '' ORDER BY g COLLATE NOCASE`
+    ).all().map((r) => r.g);
   }
 
   /** Autocomplete: indexed terms starting with `prefix`, most frequent first. */

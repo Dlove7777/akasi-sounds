@@ -19,6 +19,7 @@ const mediaUrl = (absPath) => `akmedia://audio/${encodeURIComponent(absPath)}`;
 
 const { openDb } = require('../src/db');
 const { buildManifest } = require('../src/credits');
+const sidecar = require('../src/sidecar');
 const providers = require('../src/providers');
 const freesound = require('../src/providers/freesound');
 const { scanFolder } = require('../src/indexer');
@@ -86,7 +87,37 @@ app.on('window-all-closed', () => {
 
 /* ---------------------------- IPC: library ---------------------------- */
 
-ipcMain.handle('lib:search', (_e, { query, opts }) => db.search(query, opts || {}));
+// Search: FTS keyword base, blended with CLAP semantic similarity when the AI
+// sidecar is up and the sort is relevance. Semantic-only hits (no keyword match)
+// join the results; every row still respects the scope filters.
+let clapReady = false;
+ipcMain.handle('lib:search', async (_e, { query, opts }) => {
+  const o = opts || {};
+  const kw = db.search(query, o);
+  const q = String(query || '').trim();
+  if (!q || !clapReady || (o.sort && o.sort !== 'relevance')) return kw;
+  try {
+    const r = await sidecar.embedText(q);
+    if (!r?.embedding) return kw;
+    const qv = r.embedding;
+    const universe = db.search('', { ...o, sort: 'newest', limit: 2000 });
+    const kwRank = new Map(kw.map((row, i) => [row.id, i]));
+    const scored = [];
+    for (const row of universe) {
+      const sem = row.embedding ? sidecar.cosine(row.embedding, qv) : 0;
+      const kwScore = kwRank.has(row.id) ? 1 / (kwRank.get(row.id) + 2) : 0;
+      if (sem < 0.18 && !kwRank.has(row.id)) continue; // neither signal — drop
+      scored.push({ row, score: sem * 0.6 + kwScore * 0.9, sem: sem >= 0.18 });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, 500).map(({ row, sem }) => {
+      const { embedding, ...rest } = row; // don't ship blobs to the renderer
+      return { ...rest, _sem: sem ? 1 : 0 };
+    });
+  } catch {
+    return kw;
+  }
+});
 ipcMain.handle('lib:stats', () => db.stats());
 ipcMain.handle('lib:favorite', (_e, id) => db.toggleFavorite(id));
 ipcMain.handle('lib:folders', () => db.listFolders());
@@ -105,6 +136,67 @@ ipcMain.handle('col:delete', (_e, id) => db.deleteCollection(id));
 ipcMain.handle('col:add', (_e, { collectionId, soundId }) => db.addToCollection(collectionId, soundId));
 ipcMain.handle('col:remove', (_e, { collectionId, soundId }) => db.removeFromCollection(collectionId, soundId));
 ipcMain.handle('col:forSound', (_e, soundId) => db.collectionsForSound(soundId));
+
+/* --------------------------- IPC: AI analysis -------------------------- */
+
+ipcMain.handle('ai:status', () => ({ installed: sidecar.available(), ready: clapReady }));
+ipcMain.handle('lib:genres', () => db.genres());
+
+// Warm the CLAP model in the background shortly after launch (no-op if venv absent).
+app.whenReady().then(() => {
+  if (!sidecar.available()) return;
+  setTimeout(() => {
+    sidecar.startClap()
+      .then(() => { clapReady = true; win?.webContents.send('ai:ready'); })
+      .catch(() => { /* stays keyword-only */ });
+  }, 3000);
+});
+
+// Analyze Library: librosa BPM/key in one batch, then CLAP classify+embed per file.
+let analyzeRunning = false;
+ipcMain.handle('analyze:run', async () => {
+  if (analyzeRunning) return { error: 'analysis already running' };
+  if (!sidecar.available()) return { error: 'AI sidecar not installed — run sidecar/setup.sh' };
+  analyzeRunning = true;
+  try {
+    const todo = db.needAnalysis();
+    if (!todo.length) return { done: 0, total: 0 };
+    const fileOf = (r) => [r.path, r.cached_path].find((p) => p && fs.existsSync(p));
+    const withFiles = todo.map((r) => ({ ...r, file: fileOf(r) })).filter((r) => r.file);
+    win?.webContents.send('analyze:progress', { phase: 'bpm/key', done: 0, total: withFiles.length });
+
+    const dsp = await sidecar.analyzeBatch(withFiles.map((r) => r.file));
+
+    let done = 0;
+    for (const r of withFiles) {
+      const d = dsp.get(r.file) || {};
+      let ai = {};
+      try {
+        const c = await sidecar.classify(r.file);
+        if (!c.error) {
+          ai = {
+            kind: c.kind,
+            vocals: c.vocals ?? null,
+            ai_genre: c.genre ?? null,
+            embedding: c.embedding ? Buffer.from(new Float32Array(c.embedding).buffer) : null,
+          };
+        }
+      } catch { /* keep DSP-only result */ }
+      db.setAnalysis(r.id, {
+        bpm: ai.kind === 'music' || !ai.kind ? d.bpm ?? null : null, // BPM on sfx is noise
+        key: d.key ?? null,
+        ...ai,
+      });
+      done += 1;
+      if (done % 5 === 0 || done === withFiles.length) {
+        win?.webContents.send('analyze:progress', { phase: 'ai', done, total: withFiles.length, current: r.name });
+      }
+    }
+    return { done, total: withFiles.length };
+  } finally {
+    analyzeRunning = false;
+  }
+});
 
 /* ------------------------- IPC: credits export ------------------------ */
 

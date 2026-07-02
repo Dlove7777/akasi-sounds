@@ -119,6 +119,25 @@ const ok = (label, cond, extra = '') => {
   ok('addManyToCollection adds all (dupes ignored)', db.listCollections().find((c) => c.id === batchCol)?.count === allIds.length);
   db.deleteCollection(batchCol);
 
+  // 2d2. AI analysis fields + filters
+  const sidecar = require('../src/sidecar');
+  const mId = db.search('', { kind: 'music' })[0].id;
+  const fakeEmb = Buffer.from(new Float32Array(512).fill(0.044).buffer);
+  db.setAnalysis(mId, { bpm: 124, key: 'Gm', vocals: 0, ai_genre: 'Ambient', kind: 'music', embedding: fakeEmb });
+  const analyzed = db.getSound(mId);
+  ok('setAnalysis persists key/vocals/ai_genre/embedding', analyzed.key === 'Gm' && analyzed.vocals === 0 &&
+     analyzed.ai_genre === 'Ambient' && Buffer.isBuffer(analyzed.embedding));
+  ok('setAnalysis keeps tag-genre authoritative', analyzed.genre === 'Cinematic');
+  ok('setAnalysis keeps tag-BPM authoritative (90 not overwritten)', analyzed.bpm === 90);
+  ok('BPM range filter', db.search('', { bpmMin: 85, bpmMax: 95 }).some((r) => r.id === mId) &&
+     !db.search('', { bpmMin: 140 }).some((r) => r.id === mId));
+  ok('Vocals filter (instrumental)', db.search('', { vocals: 0 }).some((r) => r.id === mId));
+  ok('Genre filter hits ai_genre too', db.search('', { genre: 'Ambient' }).some((r) => r.id === mId));
+  ok('Duration bucket filter', db.search('', { durMin: 2, durMax: 15 }).every((r) => r.duration >= 2 && r.duration <= 15));
+  ok('allEmbeddings returns the semantic index', db.allEmbeddings().some((r) => r.id === mId));
+  ok('genres() unions tag + AI genres', db.genres().includes('Ambient') && db.genres().includes('Cinematic'));
+  ok('cosine on stored blob ≈ 1 for identical vector', Math.abs(sidecar.cosine(fakeEmb, new Float32Array(512).fill(0.044)) - 512 * 0.044 * 0.044) < 0.01);
+
   // 2e. Credits manifest — the licensing deliverable
   const { buildManifest, classifyLicense } = require('../src/credits');
   ok('classifyLicense maps the license zoo', classifyLicense('http://creativecommons.org/licenses/by/4.0/') === 'cc-by' &&
@@ -200,6 +219,27 @@ const ok = (label, cond, extra = '') => {
     } catch (e) {
       ok('Cache + render pipeline', false, e.message);
     }
+  }
+
+  // 6b. AI sidecar (only when the venv is installed): librosa BPM/key on fixtures
+  if (sidecar.available()) {
+    try {
+      const { execFile: exf } = require('node:child_process');
+      const click = path.join(tmp, 'click120.wav');
+      const arp = path.join(tmp, 'cmajor.wav');
+      await new Promise((res, rej) => exf(audio.FFMPEG, ['-y', '-f', 'lavfi', '-i',
+        "aevalsrc='if(lt(mod(t,0.5),0.03),sin(1000*2*PI*t),0)':d=8", click], (e) => (e ? rej(e) : res())));
+      await new Promise((res, rej) => exf(audio.FFMPEG, ['-y', '-f', 'lavfi', '-i',
+        "aevalsrc='0.5*sin(261.63*2*PI*t)*lt(mod(t,2),0.5)+0.5*sin(329.63*2*PI*t)*between(mod(t,2),0.5,1)+0.5*sin(392*2*PI*t)*between(mod(t,2),1,1.5)+0.5*sin(523.25*2*PI*t)*gte(mod(t,2),1.5)':d=8", arp], (e) => (e ? rej(e) : res())));
+      const dsp = await sidecar.analyzeBatch([click, arp]);
+      const c = dsp.get(click), a = dsp.get(arp);
+      ok('Sidecar BPM detection near 120', c?.bpm > 110 && c?.bpm < 130, `${c?.bpm} BPM`);
+      ok('Sidecar key detection: C major arpeggio → C', a?.key === 'C', a?.key);
+    } catch (e) {
+      ok('AI sidecar DSP', false, e.message);
+    }
+  } else {
+    console.log('⏭️  AI sidecar skipped (sidecar/setup.sh not run)');
   }
 
   // 7. Spectrogram DSP (renderer lib, imported dynamically — it's ESM)

@@ -53,6 +53,7 @@ if (!window.akasi) {
       name: `${genre} Bed ${String((i % 30) + 1).padStart(2, '0')}.wav`,
       tags: `${genre.toLowerCase()} ${artist.toLowerCase()} bed underscore loop`,
       artist, album: `${genre} Vol. ${(i % 4) + 1}`, genre, bpm: 70 + (i % 80), year: 2020 + (i % 6),
+      key: ['C', 'Am', 'F', 'Gm', 'D', 'Em'][i % 6], vocals: i % 4 === 0 ? 1 : 0,
       duration: 30 + (i % 120), license: i % 5 === 0 ? 'ACE-Step 1.5 / Apache-2.0' : lic,
       attribution: i % 5 === 0 ? 'Generated · ACE-Step 1.5' : (lic.startsWith('CC') ? `"${genre} Bed" by ${artist}` : null),
       favorite: i % 23 === 0 ? 1 : 0,
@@ -80,6 +81,12 @@ if (!window.akasi) {
       (!o.recentOnly || d.last_used_at) &&
       (!o.source || d.source === o.source) &&
       (!o.kind || d.kind === o.kind) &&
+      (o.bpmMin == null || (d.bpm || 0) >= o.bpmMin) &&
+      (o.bpmMax == null || (d.bpm || 999) <= o.bpmMax) &&
+      (o.durMin == null || (d.duration || 0) >= o.durMin) &&
+      (o.durMax == null || (d.duration || 9e9) <= o.durMax) &&
+      (o.vocals == null || d.vocals === o.vocals) &&
+      (!o.genre || d.genre === o.genre) &&
       (!o.collectionId || (membership[o.collectionId] && membership[o.collectionId].has(d.id))) &&
       matches(d, q)
     );
@@ -110,6 +117,11 @@ if (!window.akasi) {
     addManyToCollection: async (colId, ids) => { (membership[colId] = membership[colId] || new Set()); ids.forEach((sid) => membership[colId].add(sid)); return ids.length; },
     startDragMany: () => {},
     exportCredits: async () => ({ path: '/mock/audio-credits.md', count: 4, flagged: 1, excluded: false }),
+    aiStatus: async () => ({ installed: true, ready: true }),
+    analyzeLibrary: async () => ({ done: 42, total: 42 }),
+    genres: async () => GENRES,
+    onAnalyzeProgress: () => {},
+    onAiReady: () => {},
     listFolders: async () => [{ path: '/Users/you/SFX Library' }, { path: '/Users/you/Music/Beds' }],
     addFolders: async () => ({ added: [] }),
     providers: async () => [{ id: 'freesound', label: 'Freesound' }],
