@@ -256,6 +256,25 @@ class AkasiDb {
     return this.db.prepare('UPDATE sounds SET favorite = 1 - favorite WHERE id = ?').run(id).changes;
   }
 
+  /** Batch: set favorite on/off for many ids (single transaction). */
+  setFavoriteMany(ids, on) {
+    const stmt = this.db.prepare('UPDATE sounds SET favorite = ? WHERE id = ?');
+    const tx = this.db.transaction((list) => list.forEach((id) => stmt.run(on ? 1 : 0, id)));
+    tx(ids);
+    return ids.length;
+  }
+
+  /** Batch: add many sounds to a collection (single transaction, dupes ignored). */
+  addManyToCollection(collectionId, ids) {
+    const stmt = this.db.prepare(
+      'INSERT OR IGNORE INTO collection_sounds(collection_id, sound_id, added_at) VALUES (?, ?, ?)'
+    );
+    const now = Date.now();
+    const tx = this.db.transaction((list) => list.forEach((id) => stmt.run(collectionId, id, now)));
+    tx(ids);
+    return ids.length;
+  }
+
   markUsed(id) {
     return this.db
       .prepare('UPDATE sounds SET use_count = use_count + 1, last_used_at = ? WHERE id = ?')

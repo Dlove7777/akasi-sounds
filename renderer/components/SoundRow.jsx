@@ -128,7 +128,7 @@ function MetaEditor({ sound, onSave, onClose }) {
 }
 
 export default function SoundRow({
-  sound, height, selected, musicColumns, collections, onSelect, onToggleFav, onAddToCollection, onEdit,
+  sound, height, selected, isChecked, musicColumns, collections, onSelect, onToggleFav, onAddToCollection, onEdit,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -142,9 +142,9 @@ export default function SoundRow({
 
   return (
     <div
-      className={`row ${selected ? 'sel' : ''}`}
+      className={`row ${selected ? 'sel' : ''} ${isChecked ? 'checked' : ''}`}
       style={{ height }}
-      onClick={() => onSelect(s)}
+      onClick={(e) => onSelect(s, { meta: e.metaKey || e.ctrlKey, shift: e.shiftKey })}
     >
       <button
         className={`star ${s.favorite ? 'on' : ''}`}

@@ -29,6 +29,9 @@ const GROUPS = [
     keys: [
       ['★ click', 'Favorite'],
       ['＋ on a row', 'Add to collection'],
+      ['⌘ click / ⇧ click', 'Multi-select rows'],
+      ['⌘A', 'Select all results'],
+      ['Esc', 'Clear selection'],
       ['?', 'Toggle this sheet'],
     ],
   },

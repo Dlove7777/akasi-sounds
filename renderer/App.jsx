@@ -26,6 +26,8 @@ export default function App() {
   const [sugs, setSugs] = useState([]);
   const [searchFocus, setSearchFocus] = useState(false);
   const [recent, setRecent] = useState(loadRecent);
+  const [checked, setChecked] = useState(() => new Set()); // multi-selection (ids)
+  const anchorRef = useRef(-1); // shift-range anchor (index in results)
   const [stats, setStats] = useState({ total: 0, favorites: 0, music: 0 });
   const [providers, setProviders] = useState([]);
   const [folders, setFolders] = useState([]);
@@ -65,6 +67,33 @@ export default function App() {
     window.akasi.onDragError?.((msg) => setBusy(`Drag failed: ${msg}`));
   }, [loadMeta]);
 
+  // Row click router: plain = audition (clears multi-selection), ⌘/Ctrl = toggle
+  // into the checked set, ⇧ = range from the last anchor.
+  const onRowSelect = useCallback((sound, mods = {}) => {
+    const idx = results.findIndex((r) => r.id === sound.id);
+    if (mods.meta) {
+      anchorRef.current = idx;
+      setChecked((c) => {
+        const n = new Set(c);
+        n.has(sound.id) ? n.delete(sound.id) : n.add(sound.id);
+        return n;
+      });
+      return;
+    }
+    if (mods.shift && anchorRef.current >= 0) {
+      const [a, b] = [anchorRef.current, idx].sort((x, y) => x - y);
+      setChecked((c) => {
+        const n = new Set(c);
+        for (let i = a; i <= b; i++) n.add(results[i].id);
+        return n;
+      });
+      return;
+    }
+    anchorRef.current = idx;
+    setChecked(new Set());
+    cue(sound);
+  }, [results]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Debounced audition: selection highlights instantly; the player loads the sound
   // that's still selected after the debounce, so holding an arrow key doesn't fetch
   // every row it passes over.
@@ -90,7 +119,12 @@ export default function App() {
       const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || '');
       if (typing) return;
       if (e.key === '?') { setSheetOpen((v) => !v); return; }
-      if (e.key === 'Escape') { setSheetOpen(false); return; }
+      if (e.key === 'Escape') { setSheetOpen(false); setChecked(new Set()); return; }
+      if ((e.key === 'a' || e.key === 'A') && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setChecked(new Set(results.map((r) => r.id)));
+        return;
+      }
       if (e.key === 'a' || e.key === 'A') { setAutoPlay((v) => !v); return; }
       if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
       if (!results.length) return;
@@ -197,6 +231,26 @@ export default function App() {
     setTimeout(() => setBusy(null), 900);
   }
 
+  const checkedIds = [...checked];
+
+  async function batchFavorite() {
+    await window.akasi.setFavoriteMany(checkedIds, true);
+    setResults((rs) => rs.map((r) => (checked.has(r.id) ? { ...r, favorite: 1 } : r)));
+    loadMeta();
+  }
+
+  async function batchAddToCollection(collectionId) {
+    await window.akasi.addManyToCollection(collectionId, checkedIds);
+    setCollections(await window.akasi.listCollections());
+    setBusy(`Added ${checkedIds.length} to collection`);
+    setTimeout(() => setBusy(null), 1200);
+  }
+
+  function batchDragStart(e) {
+    e.preventDefault();
+    window.akasi.startDragMany?.(checkedIds);
+  }
+
   async function addToCollection(collectionId, s) {
     await window.akasi.addToCollection(collectionId, s.id);
     setCollections(await window.akasi.listCollections());
@@ -294,14 +348,36 @@ export default function App() {
           <ResultsList
             rows={results}
             selectedId={selectedId}
+            checked={checked}
             resetKey={`${remoteMode}|${scope}|${activeCollectionId}|${query}`}
             musicColumns={musicColumns}
             collections={collections}
-            onSelect={cue}
+            onSelect={onRowSelect}
             onToggleFav={toggleFav}
             onAddToCollection={addToCollection}
             onEdit={editMeta}
           />
+        )}
+
+        {checked.size > 1 && (
+          <div className="batch-bar">
+            <span className="batch-count">{checked.size} selected</span>
+            <button className="batch-btn" onClick={batchFavorite}>★ Favorite all</button>
+            <div className="batch-col">
+              <select
+                className="batch-select"
+                defaultValue=""
+                onChange={(e) => { if (e.target.value) { batchAddToCollection(+e.target.value); e.target.value = ''; } }}
+              >
+                <option value="" disabled>＋ Add to collection…</option>
+                {collections.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div className="batch-drag" draggable onDragStart={batchDragStart} title="Drag all selected into your timeline">
+              ⇥ Drag {checked.size} files
+            </div>
+            <button className="batch-clear" onClick={() => setChecked(new Set())}>esc</button>
+          </div>
         )}
 
         <div className="dock">

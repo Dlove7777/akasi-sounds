@@ -108,6 +108,17 @@ const ok = (label, cond, extra = '') => {
   db.deleteCollection(colId);
   ok('Delete collection cascades membership, keeps sound', db.listCollections().length === 1 && db.getSound(thunder[0].id) != null);
 
+  // 2d. Batch ops
+  const allIds = db.search('').map((r) => r.id);
+  db.setFavoriteMany(allIds, true);
+  ok('setFavoriteMany favorites all', db.stats().favorites === allIds.length, `${allIds.length} rows`);
+  db.setFavoriteMany(allIds.slice(1), false);
+  ok('setFavoriteMany un-favorites subset', db.stats().favorites === 1);
+  const batchCol = db.createCollection('Batch Test');
+  db.addManyToCollection(batchCol, allIds);
+  ok('addManyToCollection adds all (dupes ignored)', db.listCollections().find((c) => c.id === batchCol)?.count === allIds.length);
+  db.deleteCollection(batchCol);
+
   // 3. Live Freesound search (network + key)
   let remote = null;
   if (freesound.available()) {

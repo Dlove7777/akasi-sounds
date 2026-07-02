@@ -60,8 +60,11 @@ preview-verify if UI-visible → commit + push `main` → check item off with a 
   selection/playhead/segment overlays; SPEC pill + `S` key, persisted. DSP verified in
   smoke: 200Hz→bin 6, 3kHz→bin 96 (theory 6.4/96). 41/41. Gotcha: `.js` ESM can't be
   dynamic-imported under `"type":"commonjs"` → renamed `.mjs`.
-- [ ] **9. Multi-select batch ops** — shift/cmd-click rows → favorite, add-to-collection,
-  drag several as one multi-file native drag.
+- [x] **9. Multi-select batch ops** — ✅ 2026-07-02. ⌘-click toggle / ⇧-click range /
+  ⌘A all / Esc clear (amber checked styling, separate from the teal audition cursor);
+  floating batch bar: Favorite-all, add-all-to-collection, multi-file native drag
+  (original/cached files via `startDrag({files})` — no crop/FX on batch), transactional
+  DB batch methods. 44/44; range→favorite flow verified in preview.
 - [ ] **10. Waveform hover-scrub on rows** — hover a row's mini waveform to preview from
   that point without changing dock selection (BaseHead snappiness).
 - [ ] **11. Credits/attribution export** — per-collection Markdown/CSV manifest;

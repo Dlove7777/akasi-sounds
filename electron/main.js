@@ -92,6 +92,8 @@ ipcMain.handle('lib:folders', () => db.listFolders());
 ipcMain.handle('providers:list', () => providers.availableProviders());
 ipcMain.handle('lib:suggest', (_e, prefix) => db.suggest(prefix));
 ipcMain.handle('lib:update', (_e, { id, fields }) => db.updateMeta(id, fields || {}));
+ipcMain.handle('lib:favMany', (_e, { ids, on }) => db.setFavoriteMany(ids || [], !!on));
+ipcMain.handle('col:addMany', (_e, { collectionId, ids }) => db.addManyToCollection(collectionId, ids || []));
 
 /* -------------------------- IPC: collections -------------------------- */
 
@@ -209,6 +211,26 @@ ipcMain.on('drag:start', async (e, { id, selection }) => {
     });
     db.markUsed(id);
     e.sender.startDrag({ file, icon: DRAG_ICON });
+  } catch (err) {
+    win.webContents.send('drag:error', String(err));
+  }
+});
+
+// Multi-file native drag: hands the OS the ORIGINAL files (local path or cached
+// preview) — no crop/FX for batch drags; those are single-sound player features.
+ipcMain.on('drag:startMany', async (e, ids) => {
+  try {
+    const files = [];
+    for (const id of ids || []) {
+      const s = db.getSound(id);
+      if (!s) continue;
+      let file = [s.path, s.cached_path].find((p) => p && fs.existsSync(p));
+      if (!file && s.url) {
+        try { file = await ensureCached(cacheDir(), s, freesound.fetchPreview); } catch { /* skip */ }
+      }
+      if (file) { files.push(file); db.markUsed(id); }
+    }
+    if (files.length) e.sender.startDrag({ files, icon: DRAG_ICON });
   } catch (err) {
     win.webContents.send('drag:error', String(err));
   }
