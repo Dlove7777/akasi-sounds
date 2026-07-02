@@ -107,7 +107,12 @@ function migrate(db) {
   }
 }
 
-function openDb(dbPath) {
+function openDb(dbPath, opts = {}) {
+  if (opts.readonly) {
+    // Read-only consumers (the MCP door) can't run pragmas/migrations that write.
+    const db = new Database(dbPath, { readonly: true, fileMustExist: true });
+    return new AkasiDb(db);
+  }
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');

@@ -20,6 +20,7 @@ const mediaUrl = (absPath) => `akmedia://audio/${encodeURIComponent(absPath)}`;
 const { openDb } = require('../src/db');
 const { buildManifest } = require('../src/credits');
 const sidecar = require('../src/sidecar');
+const { blendedSearch } = require('../src/search');
 const providers = require('../src/providers');
 const freesound = require('../src/providers/freesound');
 const { scanFolder } = require('../src/indexer');
@@ -91,33 +92,7 @@ app.on('window-all-closed', () => {
 // sidecar is up and the sort is relevance. Semantic-only hits (no keyword match)
 // join the results; every row still respects the scope filters.
 let clapReady = false;
-ipcMain.handle('lib:search', async (_e, { query, opts }) => {
-  const o = opts || {};
-  const kw = db.search(query, o);
-  const q = String(query || '').trim();
-  if (!q || !clapReady || (o.sort && o.sort !== 'relevance')) return kw;
-  try {
-    const r = await sidecar.embedText(q);
-    if (!r?.embedding) return kw;
-    const qv = r.embedding;
-    const universe = db.search('', { ...o, sort: 'newest', limit: 2000 });
-    const kwRank = new Map(kw.map((row, i) => [row.id, i]));
-    const scored = [];
-    for (const row of universe) {
-      const sem = row.embedding ? sidecar.cosine(row.embedding, qv) : 0;
-      const kwScore = kwRank.has(row.id) ? 1 / (kwRank.get(row.id) + 2) : 0;
-      if (sem < 0.18 && !kwRank.has(row.id)) continue; // neither signal — drop
-      scored.push({ row, score: sem * 0.6 + kwScore * 0.9, sem: sem >= 0.18 });
-    }
-    scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, 500).map(({ row, sem }) => {
-      const { embedding, ...rest } = row; // don't ship blobs to the renderer
-      return { ...rest, _sem: sem ? 1 : 0 };
-    });
-  } catch {
-    return kw;
-  }
-});
+ipcMain.handle('lib:search', (_e, { query, opts }) => blendedSearch(db, sidecar, query, opts || {}, clapReady));
 ipcMain.handle('lib:stats', () => db.stats());
 ipcMain.handle('lib:favorite', (_e, id) => db.toggleFavorite(id));
 ipcMain.handle('lib:folders', () => db.listFolders());
