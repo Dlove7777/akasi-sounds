@@ -156,12 +156,22 @@ ipcMain.handle('audio:peaks', async (_e, id) => {
   });
 });
 
-// Return a file:// path playable in the renderer <audio> (caches remote previews).
-ipcMain.handle('audio:resolve', async (_e, id) => {
+// Return a playable URL for the renderer <audio> (caches remote previews).
+// fx.reverse → serve an ffmpeg-reversed temp render (cached per sound) so the
+// audition is honest: what you hear reversed is exactly what the drag will bake.
+const fxDir = () => path.join(dataDir(), 'fx-cache');
+ipcMain.handle('audio:resolve', async (_e, id, fx) => {
   const s = db.getSound(id);
   if (!s) throw new Error('not found');
   const local = await ensureCached(cacheDir(), s, freesound.fetchPreview);
   if (s.source !== 'local' && local !== s.cached_path) db.setCachedPath(id, local);
+  if (fx?.reverse) {
+    const rev = path.join(fxDir(), `rev_${id}.wav`);
+    if (!fs.existsSync(rev)) {
+      await audio.render(local, { reverse: true, outDir: fxDir(), name: `rev_${id}` });
+    }
+    return { path: rev, url: mediaUrl(rev) };
+  }
   return { path: local, url: mediaUrl(local) };
 });
 
@@ -176,6 +186,9 @@ ipcMain.on('drag:start', async (e, { id, selection }) => {
       end: selection?.end,
       fadeIn: selection?.fadeIn,
       fadeOut: selection?.fadeOut,
+      speed: selection?.speed,
+      reverse: selection?.reverse,
+      gainDb: selection?.gainDb,
       outDir: dropDir(),
       name: s.name,
     });

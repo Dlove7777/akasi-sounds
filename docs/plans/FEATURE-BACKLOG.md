@@ -16,11 +16,12 @@ preview-verify if UI-visible → commit + push `main` → check item off with a 
   envelope, concurrency-gated (3) in main, cached in `peaks` BLOB; RowWave canvas per
   virtualized row w/ module-level cache; teal on selection. Bonus: smoke now runs via
   `ELECTRON_RUN_AS_NODE` (`npm run test:core`) — ABI flip-flop eliminated. 24/24.
-- [ ] **2. Pitch / speed / reverse / gain audition — baked into drag** — Soundly's
-  killer trick. Live preview: `playbackRate` + `preservesPitch=false` for varispeed,
-  gain via WebAudio GainNode. Drag-out render bakes the same transform via ffmpeg
-  (`asetrate`/`atempo`/`areverse`/`volume`). Reset-on-new-file like Soundminer's
-  varispeed fader.
+- [x] **2. Pitch / speed / reverse / gain audition — baked into drag** — ✅ 2026-07-02.
+  Varispeed ±12 st (`playbackRate`+`preservesPitch=false`), gain −24..+12 dB via
+  GainNode, reverse via ffmpeg-rendered temp (fx-cache, audition = exactly what bakes);
+  drag render chains areverse→crop→asetrate/aresample→volume→fades. Keys: R / [ ] / 0,
+  reset-per-file. Gotchas fixed: `-t` must be an INPUT option (output `-t` + varispeed
+  silently pulls extra input); functional fx updates (rapid keys clobbered). 27/27.
 - [ ] **3. Loop + auto-play toggles, richer transport shortcuts** — `L` loop, `A`
   auto-play-on-select toggle, `R` reverse, `M` mute, `[`/`]` pitch nudge, `?` opens a
   shortcut cheat-sheet overlay (Soundly ships a printed cheat sheet; ours is built in).

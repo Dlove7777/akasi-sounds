@@ -109,6 +109,16 @@ const ok = (label, cond, extra = '') => {
       const wmeta = await audio.probe(wav);
       ok('ffmpeg render crop+fade -> WAV', fs.existsSync(wav) && wmeta.duration > 0 && wmeta.duration <= 1.6, `${wmeta.duration?.toFixed(2)}s`);
 
+      // 5b. FX render engine: varispeed / reverse / gain baked correctly
+      const fast = await audio.render(cached, { start: 0, end: 2, speed: 2, outDir: path.join(tmp, 'drops'), name: 'fx_fast' });
+      const fmeta = await audio.probe(fast);
+      ok('Varispeed 2x halves duration', fmeta.duration > 0.8 && fmeta.duration < 1.2, `${fmeta.duration?.toFixed(2)}s (from 2s crop)`);
+      const rev = await audio.render(cached, { reverse: true, start: 0, end: 1.5, outDir: path.join(tmp, 'drops'), name: 'fx_rev' });
+      const rmeta = await audio.probe(rev);
+      ok('Reverse + crop-on-reversed-timeline', rmeta.duration > 1.3 && rmeta.duration < 1.7, `${rmeta.duration?.toFixed(2)}s`);
+      const loud = await audio.render(cached, { start: 0, end: 1, gainDb: 6, fadeOut: 0.2, outDir: path.join(tmp, 'drops'), name: 'fx_gain' });
+      ok('Gain + fade render succeeds', fs.existsSync(loud) && (await audio.probe(loud)).duration > 0.8);
+
       // 6. Inline-waveform peaks: real decode + DB blob roundtrip
       const peaks = await audio.pcmPeaks(cached);
       const nonzero = peaks ? [...peaks].filter((v) => v > 0).length : 0;

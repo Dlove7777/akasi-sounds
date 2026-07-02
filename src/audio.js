@@ -53,33 +53,61 @@ function probe(input) {
 }
 
 /**
- * Render `input` to a WAV in the temp dir.
- * opts: { start, end, fadeIn, fadeOut, outDir, name }  (all seconds; times optional)
+ * Render `input` to a WAV in the temp dir, baking the audition FX exactly as heard.
+ * opts: { start, end, fadeIn, fadeOut, outDir, name,          (seconds; optional)
+ *         speed,   — varispeed rate multiplier (2^(semi/12)); pitch+tempo together
+ *         reverse, — boolean
+ *         gainDb } — ±dB
+ * Filter order mirrors the preview: reverse → crop → varispeed → gain → fades.
+ * When reversing, the crop selection refers to the REVERSED timeline the user heard,
+ * so trimming happens after areverse (atrim), not via input seek.
  * Returns the output path.
  */
-function render(input, opts = {}) {
-  return new Promise((resolve, reject) => {
-    const outDir = opts.outDir || path.join(os.tmpdir(), 'akasi-sounds-drops');
-    fs.mkdirSync(outDir, { recursive: true });
-    const base = (opts.name || 'clip').replace(/[^\w.-]+/g, '_').replace(/\.[^.]+$/, '');
-    const out = path.join(outDir, `${base}.wav`);
+async function render(input, opts = {}) {
+  const outDir = opts.outDir || path.join(os.tmpdir(), 'akasi-sounds-drops');
+  fs.mkdirSync(outDir, { recursive: true });
+  const base = (opts.name || 'clip').replace(/[^\w.-]+/g, '_').replace(/\.[^.]+$/, '');
+  const out = path.join(outDir, `${base}.wav`);
 
-    const args = ['-y'];
-    if (opts.start != null) args.push('-ss', String(opts.start));
+  const speed = opts.speed && opts.speed !== 1 ? opts.speed : null;
+  const hasCrop = opts.start != null || opts.end != null;
+
+  const args = ['-y'];
+  const af = [];
+
+  if (opts.reverse) {
     args.push('-i', input);
-    if (opts.end != null) {
-      const dur = Math.max(0.01, opts.end - (opts.start || 0));
-      args.push('-t', String(dur));
+    af.push('areverse');
+    if (hasCrop) {
+      const s = opts.start || 0;
+      af.push(opts.end != null ? `atrim=${s}:${opts.end}` : `atrim=start=${s}`, 'asetpts=PTS-STARTPTS');
     }
-    const af = [];
-    if (opts.fadeIn) af.push(`afade=t=in:st=0:d=${opts.fadeIn}`);
-    if (opts.fadeOut) {
-      const dur = (opts.end != null ? opts.end - (opts.start || 0) : null);
-      if (dur) af.push(`afade=t=out:st=${Math.max(0, dur - opts.fadeOut)}:d=${opts.fadeOut}`);
-    }
-    if (af.length) args.push('-af', af.join(','));
-    args.push('-c:a', 'pcm_s24le', out);
+  } else {
+    // Both -ss and -t as INPUT options: crop selects input seconds. (-t after -i
+    // would cap OUTPUT seconds — with varispeed that silently pulls extra input.)
+    if (opts.start != null) args.push('-ss', String(opts.start));
+    if (opts.end != null) args.push('-t', String(Math.max(0.01, opts.end - (opts.start || 0))));
+    args.push('-i', input);
+  }
 
+  if (speed) {
+    // True varispeed (pitch + tempo together) needs the source samplerate.
+    const meta = await probe(input);
+    const sr = meta.samplerate || 48000;
+    af.push(`asetrate=${Math.round(sr * speed)}`, `aresample=${sr}`);
+  }
+  if (opts.gainDb) af.push(`volume=${opts.gainDb}dB`);
+
+  // Fades run last, on the post-varispeed timeline.
+  const cropDur = opts.end != null ? Math.max(0.01, opts.end - (opts.start || 0)) : null;
+  const outDur = cropDur != null ? cropDur / (speed || 1) : null;
+  if (opts.fadeIn) af.push(`afade=t=in:st=0:d=${opts.fadeIn}`);
+  if (opts.fadeOut && outDur) af.push(`afade=t=out:st=${Math.max(0, outDur - opts.fadeOut)}:d=${opts.fadeOut}`);
+
+  if (af.length) args.push('-af', af.join(','));
+  args.push('-c:a', 'pcm_s24le', out);
+
+  return new Promise((resolve, reject) => {
     const p = spawn(FFMPEG, args);
     let stderr = '';
     p.stderr.on('data', (d) => (stderr += d));

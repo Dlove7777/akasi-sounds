@@ -15,6 +15,7 @@ export default function App() {
   const [auditionSound, setAuditionSound] = useState(null);
   const [cueToken, setCueToken] = useState(0);
   const [fades, setFades] = useState({ fadeIn: 0, fadeOut: 0 });
+  const [fx, setFx] = useState({ semi: 0, reverse: false, gainDb: 0 });
   const [stats, setStats] = useState({ total: 0, favorites: 0, music: 0 });
   const [providers, setProviders] = useState([]);
   const [folders, setFolders] = useState([]);
@@ -60,6 +61,7 @@ export default function App() {
     auditionTimer.current = setTimeout(() => {
       setAuditionSound(sound);
       setFades({ fadeIn: 0, fadeOut: 0 });
+      setFx({ semi: 0, reverse: false, gainDb: 0 }); // varispeed resets per file (Soundminer behavior)
       setCueToken((t) => t + 1); // signal the player to auto-play
     }, AUDITION_DEBOUNCE);
   }, []);
@@ -190,7 +192,8 @@ export default function App() {
         )}
 
         <div className="dock">
-          <Waveform sound={auditionSound} cueToken={cueToken} fades={fades} onFadesChange={setFades} />
+          <Waveform sound={auditionSound} cueToken={cueToken} fades={fades} onFadesChange={setFades}
+                    fx={fx} onFxChange={setFx} />
         </div>
       </main>
     </div>
