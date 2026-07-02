@@ -181,6 +181,46 @@ input { font-family: inherit; }
 .wf-top { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; gap: 12px; }
 .wf-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wf-sel { color: var(--accent); font-variant-numeric: tabular-nums; font-family: var(--mono); white-space: nowrap; }
+.wf-pills { display: inline-flex; gap: 5px; margin: 0 12px; }
+.pill {
+  background: transparent; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted-2); font-size: 9px; font-family: var(--mono); letter-spacing: 0.06em;
+  padding: 2px 7px; line-height: 1.4; transition: all .12s;
+}
+.pill:hover { border-color: var(--muted); color: var(--muted); }
+.pill.on { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.pill.warn { border-color: var(--accent-2); color: var(--accent-2); background: color-mix(in srgb, var(--accent-2) 12%, transparent); }
+.pill.ghost { min-width: 22px; }
+
+/* ---------------- Cheat sheet ---------------- */
+.sheet-backdrop {
+  position: fixed; inset: 0; z-index: 100; background: rgba(5,6,10,0.72);
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(3px);
+}
+.sheet {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+  padding: 22px 26px 26px; width: min(760px, 86vw); box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+}
+.sheet-head {
+  display: flex; justify-content: space-between; align-items: center;
+  font-weight: 650; font-size: 15px; margin-bottom: 18px;
+}
+.sheet-x {
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 5px;
+  color: var(--muted); font-size: 10.5px; font-family: var(--mono); padding: 3px 9px;
+}
+.sheet-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 22px; }
+.sheet-title {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.09em;
+  color: var(--muted-2); font-weight: 600; margin-bottom: 9px;
+}
+.sheet-row { display: flex; align-items: center; gap: 10px; padding: 3.5px 0; font-size: 12.5px; color: var(--muted); }
+.sheet-row kbd {
+  background: var(--panel-2); border: 1px solid var(--border); border-bottom-width: 2px;
+  border-radius: 5px; color: var(--text); font-family: var(--mono); font-size: 10.5px;
+  padding: 2px 7px; white-space: nowrap; min-width: 30px; text-align: center;
+}
 .wf-canvas { width: 100%; height: 92px; display: block; background: #0a0b10; border-radius: 7px; border: 1px solid var(--border-soft); cursor: text; }
 .wf-controls { display: flex; align-items: center; gap: 16px; margin-top: 8px; font-size: 11.5px; color: var(--muted); }
 .wf-controls label { display: inline-flex; align-items: center; gap: 6px; }

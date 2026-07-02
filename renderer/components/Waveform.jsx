@@ -17,7 +17,10 @@ function getCtx() {
   return sharedCtx;
 }
 
-export default function Waveform({ sound, cueToken, fades, onFadesChange, fx, onFxChange }) {
+export default function Waveform({
+  sound, cueToken, fades, onFadesChange, fx, onFxChange,
+  autoPlay, onAutoPlayChange, onOpenSheet,
+}) {
   const canvasRef = useRef(null);
   const audioRef = useRef(null);
   const [peaks, setPeaks] = useState(null);
@@ -30,6 +33,15 @@ export default function Waveform({ sound, cueToken, fades, onFadesChange, fx, on
   const wantPlayRef = useRef(false);
   const gainRef = useRef(null);
   const wiredRef = useRef(false);
+  const [loopOn, setLoopOn] = useState(() => localStorage.getItem('akasi.loop') === '1');
+  const [muted, setMuted] = useState(false);
+
+  // Loop + mute are listening-mode preferences — they survive sound changes.
+  useEffect(() => {
+    const a = audioRef.current;
+    if (a) { a.loop = loopOn; a.muted = muted; }
+    localStorage.setItem('akasi.loop', loopOn ? '1' : '0');
+  }, [loopOn, muted, src]);
 
   // A new cue (arrow-key or click audition) requests auto-play once the file loads.
   useEffect(() => { if (cueToken) wantPlayRef.current = true; }, [cueToken]);
@@ -97,6 +109,13 @@ export default function Waveform({ sound, cueToken, fades, onFadesChange, fx, on
       const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || '');
       if (typing) return;
       if (e.code === 'Space') { e.preventDefault(); toggle(); return; }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const a = audioRef.current;
+        if (a) { e.preventDefault(); a.currentTime = Math.max(0, Math.min(duration, a.currentTime + (e.key === 'ArrowRight' ? 1 : -1))); }
+        return;
+      }
+      if (e.key === 'l' || e.key === 'L') { setLoopOn((v) => !v); return; }
+      if (e.key === 'm' || e.key === 'M') { setMuted((v) => !v); return; }
       // Functional updates — rapid key runs must not clobber each other.
       if (e.key === 'r' || e.key === 'R') { onFxChange((f) => ({ ...f, reverse: !f.reverse })); return; }
       if (e.key === '[') { onFxChange((f) => ({ ...f, semi: Math.max(-12, (f.semi || 0) - 1) })); return; }
@@ -105,7 +124,7 @@ export default function Waveform({ sound, cueToken, fades, onFadesChange, fx, on
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [sound, playing, fx, onFxChange]);
+  }, [sound, playing, fx, onFxChange, duration]);
 
   function toggle() {
     const a = audioRef.current;
@@ -167,6 +186,15 @@ export default function Waveform({ sound, cueToken, fades, onFadesChange, fx, on
       <div className="wf-main">
         <div className="wf-top">
           <span className="wf-name" title={sound.name}>{sound.name}</span>
+          <span className="wf-pills">
+            <button className={`pill ${loopOn ? 'on' : ''}`} title="Loop playback (L)"
+              onClick={() => setLoopOn((v) => !v)}>LOOP</button>
+            <button className={`pill ${autoPlay ? 'on' : ''}`} title="Auto-play on select (A)"
+              onClick={() => onAutoPlayChange((v) => !v)}>AUTO</button>
+            <button className={`pill ${muted ? 'warn' : ''}`} title="Mute (M)"
+              onClick={() => setMuted((v) => !v)}>{muted ? 'MUTED' : 'MUTE'}</button>
+            <button className="pill ghost" title="Keyboard shortcuts (?)" onClick={onOpenSheet}>?</button>
+          </span>
           <span className="wf-sel">{selLabel}</span>
         </div>
         <canvas

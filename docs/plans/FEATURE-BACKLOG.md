@@ -22,9 +22,11 @@ preview-verify if UI-visible → commit + push `main` → check item off with a 
   drag render chains areverse→crop→asetrate/aresample→volume→fades. Keys: R / [ ] / 0,
   reset-per-file. Gotchas fixed: `-t` must be an INPUT option (output `-t` + varispeed
   silently pulls extra input); functional fx updates (rapid keys clobbered). 27/27.
-- [ ] **3. Loop + auto-play toggles, richer transport shortcuts** — `L` loop, `A`
-  auto-play-on-select toggle, `R` reverse, `M` mute, `[`/`]` pitch nudge, `?` opens a
-  shortcut cheat-sheet overlay (Soundly ships a printed cheat sheet; ours is built in).
+- [x] **3. Loop + auto-play toggles, richer transport shortcuts** — ✅ 2026-07-02.
+  LOOP/AUTO/MUTE pills in dock (L/A/M keys, loop+autoplay persisted), ←/→ seek restored,
+  `?` in-app cheat-sheet overlay (3 groups, 14 keys, Esc closes). Bonus UX fix: ↓ from
+  the search input blurs + jumps into auditioning (typing guard was trapping all keys
+  while search was focused — the type-then-arrow flow now works like Soundly).
 - [ ] **4. Segments** — auto-split multi-variation files (ffmpeg `silencedetect`),
   show segment pips on the dock waveform, click to audition a segment, drag just that
   segment to the timeline. (Soundly "Segments".)

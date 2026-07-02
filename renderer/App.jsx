@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar.jsx';
 import ResultsList from './components/ResultsList.jsx';
 import Waveform from './components/Waveform.jsx';
+import CheatSheet from './components/CheatSheet.jsx';
 
 const AUDITION_DEBOUNCE = 120; // ms — avoid a fetch storm while arrow-scrubbing
 
@@ -16,6 +17,8 @@ export default function App() {
   const [cueToken, setCueToken] = useState(0);
   const [fades, setFades] = useState({ fadeIn: 0, fadeOut: 0 });
   const [fx, setFx] = useState({ semi: 0, reverse: false, gainDb: 0 });
+  const [autoPlay, setAutoPlay] = useState(() => localStorage.getItem('akasi.autoplay') !== '0');
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [stats, setStats] = useState({ total: 0, favorites: 0, music: 0 });
   const [providers, setProviders] = useState([]);
   const [folders, setFolders] = useState([]);
@@ -62,15 +65,23 @@ export default function App() {
       setAuditionSound(sound);
       setFades({ fadeIn: 0, fadeOut: 0 });
       setFx({ semi: 0, reverse: false, gainDb: 0 }); // varispeed resets per file (Soundminer behavior)
-      setCueToken((t) => t + 1); // signal the player to auto-play
+      if (autoPlayRef.current) setCueToken((t) => t + 1); // auto-play only when the A toggle is on
     }, AUDITION_DEBOUNCE);
   }, []);
+  const autoPlayRef = useRef(autoPlay);
+  useEffect(() => {
+    autoPlayRef.current = autoPlay;
+    localStorage.setItem('akasi.autoplay', autoPlay ? '1' : '0');
+  }, [autoPlay]);
 
   // Keyboard-first navigation across the (possibly huge) result set.
   useEffect(() => {
     const onKey = (e) => {
       const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || '');
       if (typing) return;
+      if (e.key === '?') { setSheetOpen((v) => !v); return; }
+      if (e.key === 'Escape') { setSheetOpen(false); return; }
+      if (e.key === 'a' || e.key === 'A') { setAutoPlay((v) => !v); return; }
       if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
       if (!results.length) return;
       e.preventDefault();
@@ -96,7 +107,18 @@ export default function App() {
   function onCollection(id) { setRemoteMode(false); setScope('collection'); setActiveCollectionId(id); }
   function onRemote(id) { setRemoteMode(id); setResults([]); }
 
-  function onSearchKey(e) { if (e.key === 'Enter' && remoteMode) runRemote(remoteMode); }
+  function onSearchKey(e) {
+    if (e.key === 'Enter' && remoteMode) { runRemote(remoteMode); return; }
+    // Type a query → press ↓ to jump straight into auditioning (Soundly flow).
+    if (e.key === 'ArrowDown' && results.length) {
+      e.preventDefault();
+      e.target.blur();
+      const idx = results.findIndex((r) => r.id === selectedId);
+      cue(results[Math.min(results.length - 1, idx < 0 ? 0 : idx + 1)]);
+      return;
+    }
+    if (e.key === 'Escape') e.target.blur();
+  }
 
   async function addFolders() {
     setBusy('Scanning…');
@@ -193,9 +215,13 @@ export default function App() {
 
         <div className="dock">
           <Waveform sound={auditionSound} cueToken={cueToken} fades={fades} onFadesChange={setFades}
-                    fx={fx} onFxChange={setFx} />
+                    fx={fx} onFxChange={setFx}
+                    autoPlay={autoPlay} onAutoPlayChange={setAutoPlay}
+                    onOpenSheet={() => setSheetOpen(true)} />
         </div>
       </main>
+
+      <CheatSheet open={sheetOpen} onClose={() => setSheetOpen(false)} />
     </div>
   );
 }
