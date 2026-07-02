@@ -29,8 +29,31 @@ jobs:
           node-version: 20
       - run: npm install
       - run: npm run build:renderer
-      - name: Build installer (no publish)
+      # Mac archs MUST build in separate electron-builder passes: a combined
+      # --arm64+--x64 pass packages one architecture's better-sqlite3 binary into
+      # both dmgs (v0.1.2 arm64 shipped an x86_64 module → app boots windowless).
+      # Per-pass invocation forces a per-arch native rebuild.
+      - name: Build installer (mac arm64)
+        if: runner.os == 'macOS'
+        run: npx electron-builder --mac dmg --arm64 --publish never
+      - name: Build installer (mac x64)
+        if: runner.os == 'macOS'
+        run: npx electron-builder --mac dmg --x64 --publish never
+      - name: Build installer (win/linux)
+        if: runner.os != 'macOS'
         run: npx electron-builder --publish never
+      - name: Verify mac native-module arch matches dmg arch
+        if: runner.os == 'macOS'
+        run: |
+          set -e
+          for dmg in dist-app/*.dmg; do
+            hdiutil attach "$dmg" -nobrowse -quiet -mountpoint /tmp/asmount
+            APP_ARCH=$(lipo -archs "/tmp/asmount/Akasi Sounds.app/Contents/MacOS/Akasi Sounds")
+            MOD_ARCH=$(lipo -archs "/tmp/asmount/Akasi Sounds.app/Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3/build/Release/better_sqlite3.node")
+            hdiutil detach /tmp/asmount -quiet
+            echo "$dmg: app=$APP_ARCH module=$MOD_ARCH"
+            [ "$APP_ARCH" = "$MOD_ARCH" ] || { echo "ARCH MISMATCH in $dmg"; exit 1; }
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: installers-${{ matrix.os }}
