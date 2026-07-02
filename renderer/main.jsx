@@ -16,6 +16,17 @@ if (!window.akasi) {
   const ARTISTS = ['Akasi Studio', 'V. Mora', 'North Bloc', 'Kite & Ivy', 'Lowfield', 'The Meridian'];
   const LICENSES = ['CC0', 'CC BY 4.0', 'CC BY-NC 4.0', 'local'];
 
+  // Deterministic synthetic waveform envelope (no RNG — stable across renders).
+  const mkPeaks = (seed) => {
+    const p = new Uint8Array(160);
+    for (let i = 0; i < 160; i++) {
+      const env = Math.sin((i / 160) * Math.PI); // swell
+      const jitter = 0.55 + 0.45 * Math.abs(Math.sin(i * 0.7 + seed * 1.3));
+      p[i] = Math.round(230 * env * jitter);
+    }
+    return p;
+  };
+
   const demo = [];
   let id = 1;
   for (let i = 0; i < 900; i++) {
@@ -77,6 +88,7 @@ if (!window.akasi) {
     providers: async () => [{ id: 'freesound', label: 'Freesound' }],
     remoteSearch: async (p, q) => ({ count: 0, results: filt(q, { source: p }) }),
     resolveAudio: async () => ({ path: '' }),
+    peaks: async (sid) => mkPeaks(sid),
     startDrag: () => {},
     reveal: async () => {},
     listCollections: async () => listCollections(),

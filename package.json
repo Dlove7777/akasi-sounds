@@ -15,7 +15,7 @@
     "start": "electron .",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "postinstall": "electron-rebuild -f -w better-sqlite3 || true",
-    "test:core": "node scripts/smoke.js",
+    "test:core": "cross-env ELECTRON_RUN_AS_NODE=1 electron scripts/smoke.js",
     "dist:mac": "npm run build:renderer && electron-builder --mac",
     "dist:all": "npm run build:renderer && electron-builder -mwl"
   },

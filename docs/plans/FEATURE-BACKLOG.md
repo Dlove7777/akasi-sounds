@@ -5,17 +5,17 @@ pitch/speed/reverse-before-drag, Segments, playlists), Soundminer v6 (Spotting P
 XRay waveforms, varispeed, tabbed/locked search, RadFX), BaseHead (snappy browse, Peek
 Tree playlists, pitched/trimmed spotting), SoundQ (collections, iXML metadata editing).
 
-**Loop discipline per iteration:** implement top unchecked item → `node scripts/smoke.js`
-→ **`npm run rebuild`** (smoke rebuilds better-sqlite3 to node ABI and breaks Electron —
-always rebuild after) → `npx vite build` → preview-verify if UI-visible → commit + push
-`main` → check item off with a one-line note.
+**Loop discipline per iteration:** implement top unchecked item → `npm run test:core`
+(smoke now runs via `ELECTRON_RUN_AS_NODE` on Electron's ABI — no more better-sqlite3
+rebuild flip-flop; never use bare `node scripts/smoke.js`) → `npx vite build` →
+preview-verify if UI-visible → commit + push `main` → check item off with a one-line note.
 
 ## P1 — the player gets superpowers
 
-- [ ] **1. Inline row waveforms** — mini waveform strip in every result row (BaseHead/
-  Soundly signature scannability). Compute peaks lazily in main via ffmpeg (`-af
-  astats`/PCM decode), cache as a small BLOB column (`peaks`) so rows render instantly
-  on revisit; render on a tiny canvas per visible (virtualized) row only.
+- [x] **1. Inline row waveforms** — ✅ 2026-07-02. ffmpeg s16le@4kHz decode → 160-byte
+  envelope, concurrency-gated (3) in main, cached in `peaks` BLOB; RowWave canvas per
+  virtualized row w/ module-level cache; teal on selection. Bonus: smoke now runs via
+  `ELECTRON_RUN_AS_NODE` (`npm run test:core`) — ABI flip-flop eliminated. 24/24.
 - [ ] **2. Pitch / speed / reverse / gain audition — baked into drag** — Soundly's
   killer trick. Live preview: `playbackRate` + `preservesPitch=false` for varispeed,
   gain via WebAudio GainNode. Drag-out render bakes the same transform via ffmpeg

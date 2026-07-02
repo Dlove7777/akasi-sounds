@@ -108,6 +108,17 @@ const ok = (label, cond, extra = '') => {
       const wav = await audio.render(cached, { start: 0, end: Math.min(1.5, meta.duration || 1.5), fadeOut: 0.3, outDir: path.join(tmp, 'drops'), name: 'smoke_clip' });
       const wmeta = await audio.probe(wav);
       ok('ffmpeg render crop+fade -> WAV', fs.existsSync(wav) && wmeta.duration > 0 && wmeta.duration <= 1.6, `${wmeta.duration?.toFixed(2)}s`);
+
+      // 6. Inline-waveform peaks: real decode + DB blob roundtrip
+      const peaks = await audio.pcmPeaks(cached);
+      const nonzero = peaks ? [...peaks].filter((v) => v > 0).length : 0;
+      ok('pcmPeaks computes 160-bucket envelope', peaks && peaks.length === 160 && nonzero > 20, `${nonzero} nonzero buckets`);
+      const rid = db.search('thunder', { source: 'freesound' })[0]?.id;
+      if (rid && peaks) {
+        db.setPeaks(rid, peaks);
+        const back = db.getSound(rid).peaks;
+        ok('Peaks BLOB roundtrip via DB', Buffer.isBuffer(back) && back.length === 160 && back.equals(peaks));
+      }
     } catch (e) {
       ok('Cache + render pipeline', false, e.message);
     }

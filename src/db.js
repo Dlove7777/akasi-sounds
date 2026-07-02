@@ -89,6 +89,7 @@ const ADDED_COLUMNS = [
   ['genre', 'TEXT'],
   ['bpm', 'REAL'],
   ['year', 'INTEGER'],
+  ['peaks', 'BLOB'], // 160-byte waveform envelope for inline row rendering
 ];
 
 function migrate(db) {
@@ -236,6 +237,10 @@ class AkasiDb {
 
   setCachedPath(id, cachedPath) {
     return this.db.prepare('UPDATE sounds SET cached_path = ? WHERE id = ?').run(cachedPath, id).changes;
+  }
+
+  setPeaks(id, buf) {
+    return this.db.prepare('UPDATE sounds SET peaks = ? WHERE id = ?').run(buf, id).changes;
   }
 
   stats() {

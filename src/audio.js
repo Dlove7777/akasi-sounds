@@ -88,4 +88,44 @@ function render(input, opts = {}) {
   });
 }
 
-module.exports = { probe, render, FFMPEG, FFPROBE };
+/**
+ * Compute a compact peak envelope for inline row waveforms.
+ * Decodes to mono s16le @4kHz via ffmpeg, buckets |samples| into `buckets` maxima,
+ * normalizes to 0..255. Returns a Buffer of length `buckets` (tiny — cacheable in
+ * the DB) or null if the file can't be decoded.
+ */
+function pcmPeaks(input, buckets = 160) {
+  return new Promise((resolve) => {
+    const p = spawn(FFMPEG, ['-v', 'error', '-i', input, '-ac', '1', '-ar', '4000', '-f', 's16le', '-']);
+    const chunks = [];
+    let size = 0;
+    p.stdout.on('data', (d) => {
+      size += d.length;
+      if (size <= 24_000_000) chunks.push(d); // cap ~50min of 4kHz mono — plenty
+    });
+    p.on('error', () => resolve(null));
+    p.on('close', () => {
+      const raw = Buffer.concat(chunks);
+      const n = Math.floor(raw.length / 2);
+      if (n < buckets) return resolve(null);
+      const per = Math.floor(n / buckets);
+      const peaks = Buffer.alloc(buckets);
+      let globalMax = 1;
+      const maxima = new Array(buckets);
+      for (let b = 0; b < buckets; b++) {
+        let max = 0;
+        const base = b * per * 2;
+        for (let i = 0; i < per; i++) {
+          const v = Math.abs(raw.readInt16LE(base + i * 2));
+          if (v > max) max = v;
+        }
+        maxima[b] = max;
+        if (max > globalMax) globalMax = max;
+      }
+      for (let b = 0; b < buckets; b++) peaks[b] = Math.round((maxima[b] / globalMax) * 255);
+      resolve(peaks);
+    });
+  });
+}
+
+module.exports = { probe, render, pcmPeaks, FFMPEG, FFPROBE };

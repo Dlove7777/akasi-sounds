@@ -1,4 +1,55 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+
+// Peaks cache shared across (re)mounts — virtualization constantly unmounts rows,
+// so this keeps scrolling free of repeat IPC. null = known-unavailable (remote,
+// not yet cached); undefined = not asked yet.
+const peaksCache = new Map();
+const peaksInflight = new Map();
+async function getPeaks(sound) {
+  if (sound.peaks) return sound.peaks; // arrived with the search row
+  if (peaksCache.has(sound.id)) return peaksCache.get(sound.id);
+  if (!peaksInflight.has(sound.id)) {
+    peaksInflight.set(
+      sound.id,
+      (window.akasi.peaks ? window.akasi.peaks(sound.id) : Promise.resolve(null))
+        .then((p) => { peaksCache.set(sound.id, p || null); peaksInflight.delete(sound.id); return p || null; })
+        .catch(() => { peaksCache.set(sound.id, null); peaksInflight.delete(sound.id); return null; })
+    );
+  }
+  return peaksInflight.get(sound.id);
+}
+
+function RowWave({ sound, selected }) {
+  const ref = useRef(null);
+  const [peaks, setPeaks] = useState(sound.peaks || peaksCache.get(sound.id));
+
+  useEffect(() => {
+    let alive = true;
+    if (peaks === undefined) getPeaks(sound).then((p) => alive && setPeaks(p));
+    return () => { alive = false; };
+  }, [sound.id]);
+
+  useEffect(() => {
+    const c = ref.current;
+    if (!c) return;
+    const ctx = c.getContext('2d');
+    const { width: w, height: h } = c;
+    ctx.clearRect(0, 0, w, h);
+    if (!peaks || !peaks.length) {
+      ctx.fillStyle = 'rgba(86,93,115,0.25)';
+      ctx.fillRect(0, h / 2 - 0.5, w, 1);
+      return;
+    }
+    const n = peaks.length, bw = w / n, mid = h / 2;
+    ctx.fillStyle = selected ? '#4fd1c5' : '#39405a';
+    for (let i = 0; i < n; i++) {
+      const bh = Math.max(1, (peaks[i] / 255) * (h * 0.92));
+      ctx.fillRect(i * bw, mid - bh / 2, Math.max(0.6, bw - 0.4), bh);
+    }
+  }, [peaks, selected]);
+
+  return <canvas ref={ref} className="row-wave" width={200} height={26} />;
+}
 
 const fmtDur = (s) =>
   s == null ? '' : s >= 60 ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : `${s.toFixed(1)}s`;
@@ -48,6 +99,7 @@ export default function SoundRow({
       </button>
       <span className={`badge ${s.source}`}>{BADGE[s.source] || s.source}</span>
       <span className="row-name" title={s.name}>{s.name}</span>
+      <RowWave sound={s} selected={selected} />
       <span className="row-sub" title={secondary}>{secondary}</span>
       <span className="row-num">{metaNum}</span>
       <span className="row-lic">{shortLicense(s.license)}</span>

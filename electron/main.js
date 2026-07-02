@@ -124,6 +124,38 @@ ipcMain.handle('remote:search', async (_e, { provider, query, page }) => {
 
 /* ------------------------- IPC: audition / drag ----------------------- */
 
+// Lazy inline-waveform peaks. Computed once per sound from its local/cached file
+// and stored in the DB; remote sounds without a cached preview return null (we
+// never auto-download the library just to draw rows). Concurrency-gated so a
+// screenful of virtualized rows doesn't spawn 20 ffmpeg processes at once.
+let peaksActive = 0;
+const peaksQueue = [];
+function withPeaksSlot(fn) {
+  return new Promise((resolve) => {
+    const run = async () => {
+      peaksActive++;
+      try { resolve(await fn()); } catch { resolve(null); }
+      peaksActive--;
+      const next = peaksQueue.shift();
+      if (next) next();
+    };
+    peaksActive < 3 ? run() : peaksQueue.push(run);
+  });
+}
+
+ipcMain.handle('audio:peaks', async (_e, id) => {
+  const s = db.getSound(id);
+  if (!s) return null;
+  if (s.peaks) return s.peaks;
+  const file = [s.path, s.cached_path].find((p) => p && fs.existsSync(p));
+  if (!file) return null;
+  return withPeaksSlot(async () => {
+    const buf = await audio.pcmPeaks(file);
+    if (buf) db.setPeaks(id, buf);
+    return buf;
+  });
+});
+
 // Return a file:// path playable in the renderer <audio> (caches remote previews).
 ipcMain.handle('audio:resolve', async (_e, id) => {
   const s = db.getSound(id);

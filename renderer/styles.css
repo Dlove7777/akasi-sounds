@@ -126,7 +126,7 @@ input { font-family: inherit; }
 
 .row {
   display: grid;
-  grid-template-columns: 28px 46px minmax(0, 1fr) minmax(0, 1.15fr) 66px 54px 28px;
+  grid-template-columns: 28px 46px minmax(0, 1.1fr) 104px minmax(0, 0.9fr) 66px 54px 28px;
   align-items: center; gap: 11px; padding: 0 14px 0 10px;
   font-size: 13px; cursor: default; border-bottom: 1px solid var(--border-soft);
   position: relative;
@@ -147,6 +147,7 @@ input { font-family: inherit; }
 .badge.freesound { color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
 .badge.generate { color: var(--gen); background: color-mix(in srgb, var(--gen) 15%, transparent); }
 .row-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 450; }
+.row-wave { width: 104px; height: 26px; display: block; opacity: 0.9; }
 .row-sub { color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-num { color: var(--muted); font-size: 11.5px; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
 .row-lic { color: var(--muted-2); font-size: 10px; font-family: var(--mono); text-align: right; letter-spacing: 0.02em; }
