@@ -75,8 +75,10 @@ preview-verify if UI-visible → commit + push `main` → check item off with a 
   + CSV; ⎙ Credits button appears in collection/Recent scopes (⌥-click = client-safe:
   CC-BY-NC excluded + loudly noted; default flags NC as not-client-safe). Save dialog
   → .md + .csv → reveal in Finder. 49/49 incl. exclusion + attribution assertions.
-- [ ] **12. Tabbed / locked searches** — search tabs scoped to a collection or scope
-  (Soundminer v6 locked tabs).
+- [x] **12. Tabbed / locked searches** — ✅ 2026-07-02. Browser-style tab strip; each
+  tab snapshots scope+collection+query+sort ("locked"), auto-labels ("Trailer Cut ·
+  whoosh"), persists via localStorage, restores on boot; switching restores the full
+  context incl. sidebar scope. Verified round-trip in preview. **BACKLOG COMPLETE 12/12.**
 
 ## Deferred (separate phases, already planned)
 - ACE-Step generation on VIDI (plan U9/U10) · CLAP semantic search + auto-tag (U11) ·

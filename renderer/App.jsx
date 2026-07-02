@@ -8,6 +8,16 @@ import thesaurus from './lib/thesaurus.js';
 const RECENT_KEY = 'akasi.recent';
 const loadRecent = () => { try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch { return []; } };
 
+const TABS_KEY = 'akasi.tabs';
+const DEFAULT_TAB_STATE = { scope: 'library', activeCollectionId: null, remoteMode: false, query: '', sort: 'relevance' };
+const loadTabs = () => {
+  try {
+    const t = JSON.parse(localStorage.getItem(TABS_KEY));
+    if (t?.tabs?.length) return t;
+  } catch { /* fresh */ }
+  return { tabs: [{ id: 1, state: { ...DEFAULT_TAB_STATE } }], active: 0 };
+};
+
 const AUDITION_DEBOUNCE = 120; // ms — avoid a fetch storm while arrow-scrubbing
 
 export default function App() {
@@ -28,6 +38,9 @@ export default function App() {
   const [recent, setRecent] = useState(loadRecent);
   const [checked, setChecked] = useState(() => new Set()); // multi-selection (ids)
   const anchorRef = useRef(-1); // shift-range anchor (index in results)
+  const [tabState] = useState(loadTabs); // initial snapshot only
+  const [tabs, setTabs] = useState(tabState.tabs);
+  const [activeTab, setActiveTab] = useState(Math.min(tabState.active, tabState.tabs.length - 1));
   const [stats, setStats] = useState({ total: 0, favorites: 0, music: 0 });
   const [providers, setProviders] = useState([]);
   const [folders, setFolders] = useState([]);
@@ -37,6 +50,61 @@ export default function App() {
   const auditionTimer = useRef(null);
 
   const [sort, setSort] = useState('relevance');
+
+  // ---- Locked search tabs: each tab snapshots the full search context ----
+  const applyTabState = useCallback((s) => {
+    setScope(s.scope ?? 'library');
+    setActiveCollectionId(s.activeCollectionId ?? null);
+    setRemoteMode(s.remoteMode ?? false);
+    setQuery(s.query ?? '');
+    setSort(s.sort ?? 'relevance');
+  }, []);
+
+  // Restore the active tab's context once on boot.
+  useEffect(() => { applyTabState(tabs[activeTab]?.state || DEFAULT_TAB_STATE); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Any context change is captured into the active tab ("locked" behavior) + persisted.
+  useEffect(() => {
+    setTabs((ts) => {
+      const next = ts.map((t, i) =>
+        i === activeTab ? { ...t, state: { scope, activeCollectionId, remoteMode, query, sort } } : t);
+      localStorage.setItem(TABS_KEY, JSON.stringify({ tabs: next, active: activeTab }));
+      return next;
+    });
+  }, [scope, activeCollectionId, remoteMode, query, sort, activeTab]);
+
+  function switchTab(i) {
+    if (i === activeTab || !tabs[i]) return;
+    setActiveTab(i);
+    applyTabState(tabs[i].state);
+    setChecked(new Set());
+  }
+  function addTab() {
+    const id = Math.max(...tabs.map((t) => t.id)) + 1;
+    const next = [...tabs, { id, state: { ...DEFAULT_TAB_STATE } }];
+    setTabs(next);
+    setActiveTab(next.length - 1);
+    applyTabState(DEFAULT_TAB_STATE);
+  }
+  function closeTab(i, e) {
+    e.stopPropagation();
+    if (tabs.length === 1) return;
+    const next = tabs.filter((_, x) => x !== i);
+    const newActive = i < activeTab ? activeTab - 1 : Math.min(activeTab, next.length - 1);
+    setTabs(next);
+    setActiveTab(newActive);
+    if (i === activeTab) applyTabState(next[newActive].state);
+  }
+  const tabLabel = (t) => {
+    const s = t.state || {};
+    let base = s.remoteMode ? String(s.remoteMode)
+      : s.scope === 'collection' ? (collections.find((c) => c.id === s.activeCollectionId)?.name || 'Collection')
+      : s.scope === 'favorites' ? 'Favorites'
+      : s.scope === 'recent' ? 'Recent'
+      : s.scope === 'music' ? 'Music' : 'Library';
+    if (s.query?.trim()) base += ` · ${s.query.trim().slice(0, 14)}`;
+    return base;
+  };
 
   const scopeOpts = useCallback(() => {
     if (scope === 'favorites') return { favoritesOnly: true };
@@ -297,6 +365,16 @@ export default function App() {
       />
 
       <main className="main">
+        <div className="tabs">
+          {tabs.map((t, i) => (
+            <button key={t.id} className={`tab ${i === activeTab ? 'active' : ''}`} onClick={() => switchTab(i)}
+              title="Locked search tab — keeps its scope, query and sort">
+              <span className="tab-label">{tabLabel(t)}</span>
+              {tabs.length > 1 && <span className="tab-x" onClick={(e) => closeTab(i, e)}>×</span>}
+            </button>
+          ))}
+          <button className="tab-add" title="New search tab" onClick={addTab}>＋</button>
+        </div>
         <div className="searchbar">
           <span className="search-ico">⌕</span>
           <input
