@@ -64,7 +64,7 @@ async function run(brief, dry) {
       { role: 'system', content: SYSTEM },
       { role: 'user', content: brief },
     ];
-    for (let step = 0; step < 6; step++) {
+    for (let step = 0; step < 12; step++) {
       const msg = await chat(messages, oaTools);
       messages.push(msg);
       if (!msg.tool_calls?.length) {

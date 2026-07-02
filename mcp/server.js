@@ -77,12 +77,26 @@ server.registerTool(
       limit: Math.min(a.limit || 20, 100),
     };
     const rows = await blendedSearch(db, sidecar, a.query, opts, clapReady);
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify({ count: rows.length, semantic: clapReady, results: rows.slice(0, opts.limit).map(fmt) }, null, 2),
-      }],
-    };
+    const payload = { count: rows.length, semantic: clapReady, results: rows.slice(0, opts.limit).map(fmt) };
+
+    // Guide the agent out of the metadata-filter trap: if filters wiped everything
+    // out but the same query WITHOUT metadata filters would return matches, say so.
+    // (Common before ⚡ Analyze has run — bpm/vocals/genre are still NULL.)
+    const metaFilters = ['genre', 'vocals', 'bpmMin', 'bpmMax', 'durMin', 'durMax'];
+    const hadMeta = metaFilters.some((k) => opts[k] != null);
+    if (rows.length === 0 && hadMeta) {
+      const bare = { kind: opts.kind, limit: opts.limit };
+      const without = await blendedSearch(db, sidecar, a.query, bare, clapReady);
+      if (without.length) {
+        payload.hint =
+          `0 results with your filters, but ${without.length} match without them. The library ` +
+          `likely has not been analyzed yet (BPM/vocals/genre are unset until "Analyze Library" ` +
+          `runs), so metadata filters exclude everything. Re-search WITHOUT instrumental/bpm/genre ` +
+          `filters and judge from names/tags instead.`;
+        payload.previewWithoutFilters = without.slice(0, opts.limit).map(fmt);
+      }
+    }
+    return { content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }] };
   }
 );
 
