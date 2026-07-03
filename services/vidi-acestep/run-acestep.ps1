@@ -13,5 +13,8 @@ Set-Location $root
 # tunnel from M5 instead:  ssh -N -L 8001:localhost:8001 vidi
 $env:ACESTEP_HOST = "0.0.0.0"
 $env:ACESTEP_PORT = "8001"
-Write-Output "[acestep-run] starting acestep-api on 0.0.0.0:8001"
+# Eager-load models at startup so the task worker spins up before requests arrive
+# (lazy init left the queue worker not draining jobs).
+$env:ACESTEP_NO_INIT = "false"
+Write-Output "[acestep-run] starting acestep-api on 0.0.0.0:8001 (eager init)"
 uv run acestep-api --host 0.0.0.0 --port 8001
