@@ -47,7 +47,8 @@ No GNU `timeout` on macOS → `perl -e 'alarm N; exec @ARGV'`.
 - `renderer/styles.css`: `.tag-chip` styling.
 - Test: smoke — `updateMeta` additive tag round-trip (add a tag, assert FTS finds it; remove, assert it doesn't). (updateMeta already partly covered — extend.)
 
-### [ ] 4. Research latest OpenRouter models
+### [x] 4. Research latest OpenRouter models — DONE (bg Sonnet subagent)
+Shortlist: `google/gemini-3-flash-preview` (default), `z-ai/glm-5.2` (verified last-2-wk), `deepseek/deepseek-v4-flash` (cost floor), `google/gemini-3.1-flash-lite`, `anthropic/claude-haiku-4.5` (reliability baseline). No Gemini Flash newer than 3.5-flash (2026-05-19) found; no GLM cheaper than 5.2. Full doc: docs/plans/OPENROUTER-MODEL-CANDIDATES.md.
 - Spawn a background research subagent (Sonnet): scan OpenRouter's model list + release notes for models launched in the **last ~2 weeks** — new **Gemini Flash**, new **Zai/GLM**, plus any others strong at cheap tool-calling. For each: exact OpenRouter model id, context, $/Mtok in+out, tool-calling support, notes.
 - Write `docs/plans/OPENROUTER-MODEL-CANDIDATES.md` (table + a shortlist of ~5 to bake off). Commit (doc-only).
 
