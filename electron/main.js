@@ -23,6 +23,7 @@ const sidecar = require('../src/sidecar');
 const { blendedSearch, similarByEmbedding } = require('../src/search');
 const { runDirector } = require('../src/director');
 const generateProvider = require('../src/providers/generate');
+const SCORING_CORPUS = require('../src/rag').loadCorpus(); // scoring reference chunks (RAG)
 const providers = require('../src/providers');
 const freesound = require('../src/providers/freesound');
 const { scanFolder } = require('../src/indexer');
@@ -214,6 +215,7 @@ ipcMain.handle('director:chat', async (_e, { messages, opts }) => {
       generate: generateProvider.available()
         ? (spec, onStatus) => runGeneration(spec, onStatus)
         : undefined,
+      scoringCorpus: SCORING_CORPUS,
       // Give the Director every connected online library — folds hits from all
       // available providers (Freesound SFX + Jamendo music) into the index so its
       // picks become real, draggable rows (previews cache on drag).

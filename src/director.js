@@ -22,6 +22,7 @@
 const { blendedSearch, similarByEmbedding } = require('./search');
 const { SCORING_PLAYBOOK } = require('./playbook');
 const genprompt = require('./genprompt');
+const rag = require('./rag');
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 // Bake-off winner (grounded mode): 100% honest, richest real pools, usable cue sheets,
@@ -120,6 +121,15 @@ const TOOLS = [
           limit: { type: 'number' },
         },
       },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'lookup_scoring_ref',
+      description:
+        'Look up DEEPER scoring craft — music-theory→emotion, genre fingerprints, and format-specific scoring conventions (film/TV/commercial/short-form) — to ground a tricky curation call or a generation prompt. Returns reference TEXT (context), not files.',
+      parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
     },
   },
   {
@@ -242,6 +252,14 @@ async function dispatch(name, args, ctx) {
     onEvent?.({ type: 'pool', rows: [...pool.values()] });
     return JSON.stringify({ count: rows.length, results: rows.map((x) => ({ ...slim(x), sim: x._sim })) });
   }
+  if (name === 'lookup_scoring_ref') {
+    const corpus = ctx.scoringCorpus || [];
+    if (!corpus.length) return JSON.stringify({ refs: [] });
+    if (!ctx.clapReady) return JSON.stringify({ error: 'Reference lookup needs the AI model warm.', refs: [] });
+    const embed = async (t) => { const r = await sidecar.embedText(t).catch(() => null); return (r && r.embedding) || []; };
+    const refs = await rag.retrieve(String(args.query || ''), { corpus, embed, topK: 4 });
+    return JSON.stringify({ refs: refs.map((r) => ({ source: r.file, text: r.text })) }); // context only — never files
+  }
   if (name === 'write_generation_prompt') {
     let sample = null;
     if (args.samplePath && ctx.analyzeSample) {
@@ -324,7 +342,7 @@ async function runDirector(p) {
   } = p;
   const chat = p.chat || makeOpenRouterChat({ apiKey, model });
   const pool = new Map();
-  const ctx = { db, sidecar, clapReady, pool, onEvent, remoteSearch: p.remoteSearch, analyzeSample: p.analyzeSample, generate: p.generate };
+  const ctx = { db, sidecar, clapReady, pool, onEvent, remoteSearch: p.remoteSearch, analyzeSample: p.analyzeSample, generate: p.generate, scoringCorpus: p.scoringCorpus };
   const tools = buildTools(!!p.remoteSearch, !!p.generate);
   let usageTotal = { prompt_tokens: 0, completion_tokens: 0 };
   const addUsage = (u) => { if (u) { usageTotal.prompt_tokens += u.prompt_tokens || 0; usageTotal.completion_tokens += u.completion_tokens || 0; } };

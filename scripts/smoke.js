@@ -429,6 +429,26 @@ const ok = (label, cond, extra = '') => {
   ok('director: generated track lands in the pool as a real row (honesty preserved)',
     gmRes.pool.some((r) => r.id === genId && r.source === 'generate') && gmRes.pool.every((r) => db.getSound(r.id) != null));
 
+  // 2f9. RAG scoring KB (U9) — chunking, retrieval, and pool-unchanged honesty.
+  const rag = require('../src/rag');
+  const corpus = rag.loadCorpus();
+  ok('rag: scoring corpus loads + chunks from src/scoring', corpus.length >= 3 && corpus.every((c) => c.file.endsWith('.md') && c.text.length > 0));
+  // Deterministic fake embedder: bag-of-words vector over a fixed vocab (no model needed).
+  const VOCAB = ['tension', 'commercial', 'tempo', 'minor', 'film', 'lofi', 'strings', 'button', 'brand', 'drone'];
+  const fakeEmbed = async (t) => { const s = String(t).toLowerCase(); return VOCAB.map((w) => (s.split(w).length - 1)); };
+  const retr = await rag.retrieve('scoring a commercial brand button', { corpus, embed: fakeEmbed, topK: 3 });
+  ok('rag: retrieve ranks a relevant chunk first', retr.length === 3 && /commercial|brand|button/i.test(retr[0].text));
+  // Director lookup_scoring_ref must NOT add anything to the candidate pool (context only).
+  let lrTurn = 0;
+  const lrChat = async () => {
+    lrTurn++;
+    if (lrTurn === 1) return { message: { role: 'assistant', content: null, tool_calls: [{ id: 'l1', type: 'function', function: { name: 'lookup_scoring_ref', arguments: JSON.stringify({ query: 'how to score a tense promo' }) } }] }, usage: { prompt_tokens: 4, completion_tokens: 2 } };
+    return { message: { role: 'assistant', content: 'Grounded in scoring craft.' }, usage: { prompt_tokens: 3, completion_tokens: 2 } };
+  };
+  const lrRes = await runDirector({ db, sidecar, clapReady: false, messages: [{ role: 'user', content: 'score a tense promo' }], chat: lrChat, scoringCorpus: corpus });
+  ok('director: lookup_scoring_ref adds ZERO files to the pool (context only, honesty)', lrRes.pool.length === 0);
+  ok('director: lookup_scoring_ref offered in the base toolset', buildTools(false).some((t) => t.function.name === 'lookup_scoring_ref'));
+
   // 2g. Bake-off honesty checker — the guard against fabricated filenames.
   const { honestyReport } = require('./director-bakeoff');
   const hp = [{ name: 'Thunder Clap.wav' }, { name: 'Rain Light.wav' }];
