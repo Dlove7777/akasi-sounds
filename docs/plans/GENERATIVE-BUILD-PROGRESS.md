@@ -40,10 +40,10 @@ Restart the app to pick it up: `Ctrl-C`, then `npm run dev` (main-process change
 4. **≋** on a row → Find Similar; **⇪ Match sample** → drop an audio file.
 5. Deeper craft grounding (`lookup_scoring_ref`) + house-style memory (`recall_house_style`, builds up as you use it) run under the hood.
 
-### Generation (ACE-Step on VIDI) — DEPLOYED + WORKING, but slow on 8GB:
-- Server is live at `http://vidi-laptop:8001` (VIDI_ACESTEP_URL set in secrets). Ask the Director to "generate a 30s tense bed" and it will — the track lands as a draggable `source='generate'` row, MIT-licensed, analyzed.
-- **Caveat:** the RTX 4070 Laptop's 8GB forces INT8 + CPU-offload → generation is SLOW (several minutes/clip, GPU ~26% util). It's a VRAM limit, not a bug. For responsive gen, a bigger-VRAM box (or the non-offload config) is the path. The Tier-1 prompt-writer gives you the generation *value* instantly regardless (paste into Suno/ACE-Step).
-- To (re)start the VIDI server after a reboot: `ssh vidi 'powershell -File run-acestep.ps1'` (see services/vidi-acestep/).
+### Generation (ACE-Step on VIDI) — DEPLOYED + client-ready, but the server WORKER WEDGES (needs a VIDI-side fix):
+- **Honest status:** ACE-Step 1.5 is installed, the REST server is up + reachable at `http://vidi-laptop:8001`, and it **generated audio once** during initial model-load (proving the pipeline). BUT after that, queued tasks don't execute — the server logs only show polls, no inference steps, GPU sits ~27% idle. So it's **wedged, not merely slow.** Root cause is ACE-Step's async task worker on this 8GB Windows box (the first task's mp3-save crash may have poisoned the queue; or a version/config quirk). This is a SERVER-side issue — the Akasi client (`src/providers/generate.js`) is API-correct and ready; the moment the server generates reliably, in-app generation works end-to-end.
+- **What DOES fully work now:** the Tier-1 `write_generation_prompt` gives you a rich ACE-Step/Suno caption instantly (no GPU) — that's the generation *value* with zero dependency on the VIDI worker.
+- **To debug the worker in the AM:** restart clean via `ssh vidi 'powershell -File kill-acestep.ps1'` then `run-acestep.ps1`; try one gen; watch the server log for inference steps. Candidate fixes: pin an ACE-Step release, try `ACESTEP_NO_INIT=false` (eager model load) in run-acestep.ps1, or generate a single short clip right after start. A bigger-VRAM box would also sidestep the 8GB offload path entirely.
 
 ### Verdict from the fair (semantic-on) bake-off:
 - Default stays **google/gemini-3-flash-preview grounded** — richest real candidate pools; triad needs a richer library to win. Full write-up: DIRECTOR-BAKEOFF-RESULTS.md.
