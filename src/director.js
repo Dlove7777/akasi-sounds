@@ -35,8 +35,13 @@ FIRST, classify the brief:
 - MUSICAL (bed, underscore, score, track, theme, song, groove, cue) → you are picking MUSIC. Always pass kind="music" on your searches. NEVER put a sound effect (an impact, whoosh, footstep, stinger, foley hit) in a music cue sheet — a one-shot SFX is not a bed. If the brief also implies no singing ("instrumental", "under a VO", "bed"), pass instrumental=true.
 - SFX (whoosh, impact, foley, ambience, transition, hit) → pass kind="sfx".
 
+TWO SOURCES:
+- search_sounds = Dennis's OWN library. ALWAYS try this first — his files are highest quality and license-clean.
+- search_freesound = millions of Creative-Commons sounds ONLINE. Reach for it when his library lacks a good fit (his library is SFX-heavy, so music beds especially may need it). Freesound shines for SFX, textures, ambiences and loops; it's thinner on polished music beds. Its results are CC-licensed — flag CC-BY (needs credit) and NEVER present CC-BY-NC as client-safe. When both have a fit of equal quality, prefer his local file.
+
 How to work:
 - Run 2-3 DIVERSE searches, not one. Vary the angle: a mood/feeling query ("dark brooding tension"), a genre/instrumentation query ("ambient synth pad", "minimal piano"), and a literal one. Semantic AI search matches the *feeling* — describe it, don't just keyword.
+- If the local library comes up thin or off-target, DON'T give up — try search_freesound before concluding there's no fit.
 - Apply the filters the brief states: tempo words → bpmMin/bpmMax (chill <90, mid 90-120, driving 120+); "short sting" → durMax; "full bed" → durMin (a bed is usually >20s, not a 1-second file).
 - If a filtered search is thin, WIDEN (drop the bpm or duration filter) and search again before settling — don't grab a weak match just to fill the sheet. Use library_stats to see available genres.
 - Then STOP searching and write the cue sheet.
@@ -94,6 +99,29 @@ const TOOLS = [
   },
 ];
 
+// Only offered when a remote provider is wired (main process passes remoteSearch).
+const FREESOUND_TOOL = {
+  type: 'function',
+  function: {
+    name: 'search_freesound',
+    description:
+      "Search Freesound.org — millions of Creative-Commons sounds ONLINE — when Dennis's own library lacks a good fit. Results become real, draggable rows (previews cache on drag). Freesound is strongest for SFX, textures, ambiences and loops; thinner on polished music beds. Flag licensing: CC-BY needs credit, CC-BY-NC is NOT client-safe.",
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Keywords to search Freesound for.' },
+        limit: { type: 'number', description: 'Max results (default 20).' },
+      },
+      required: ['query'],
+    },
+  },
+};
+
+/** Tool set for a run — adds the online tool only when a provider is available. */
+function buildTools(hasRemote) {
+  return hasRemote ? [...TOOLS, FREESOUND_TOOL] : TOOLS;
+}
+
 /** Compact row for the model — drops the embedding blob + noisy columns. */
 function slim(r) {
   return {
@@ -138,6 +166,14 @@ async function dispatch(name, args, ctx) {
   }
   if (name === 'library_stats') {
     return JSON.stringify({ ...db.stats(), genres: db.genres() });
+  }
+  if (name === 'search_freesound') {
+    if (!ctx.remoteSearch) return JSON.stringify({ error: 'Online search unavailable (no provider/API key).' });
+    const r = await ctx.remoteSearch(String(args.query || ''), Math.min(args.limit || 20, 40));
+    if (r.error) return JSON.stringify({ error: r.error, results: [] });
+    for (const row of r.results || []) if (!pool.has(row.id)) pool.set(row.id, row);
+    onEvent?.({ type: 'pool', rows: [...pool.values()] });
+    return JSON.stringify({ count: r.count ?? (r.results || []).length, source: 'freesound', results: (r.results || []).map(slim) });
   }
   return JSON.stringify({ error: `unknown tool ${name}` });
 }
@@ -195,7 +231,8 @@ async function runDirector(p) {
   } = p;
   const chat = p.chat || makeOpenRouterChat({ apiKey, model });
   const pool = new Map();
-  const ctx = { db, sidecar, clapReady, pool, onEvent };
+  const ctx = { db, sidecar, clapReady, pool, onEvent, remoteSearch: p.remoteSearch };
+  const tools = buildTools(!!p.remoteSearch);
   let usageTotal = { prompt_tokens: 0, completion_tokens: 0 };
   const addUsage = (u) => { if (u) { usageTotal.prompt_tokens += u.prompt_tokens || 0; usageTotal.completion_tokens += u.completion_tokens || 0; } };
   const brief = [...messages].reverse().find((m) => m.role === 'user')?.content || '';
@@ -205,7 +242,7 @@ async function runDirector(p) {
   // --- grounded: one model searches + judges ---
   const convo = [{ role: 'system', content: SYSTEM }, ...messages];
   for (let step = 0; step < maxSteps; step++) {
-    const { message, usage } = await chat(convo, TOOLS);
+    const { message, usage } = await chat(convo, tools);
     addUsage(usage);
     convo.push(message);
     if (!message.tool_calls?.length) {
@@ -264,4 +301,4 @@ async function runTriad({ chat, retrieverChat: injectedRetriever, ctx, pool, bri
   return { text, pool: [...pool.values()], steps: 3, usage: usageTotal, mode: 'triad' };
 }
 
-module.exports = { runDirector, TOOLS, DEFAULT_MODEL, DEFAULT_RETRIEVER_MODEL, dispatch, slim, makeOpenRouterChat };
+module.exports = { runDirector, TOOLS, buildTools, DEFAULT_MODEL, DEFAULT_RETRIEVER_MODEL, dispatch, slim, makeOpenRouterChat };

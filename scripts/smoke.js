@@ -336,6 +336,23 @@ const ok = (label, cond, extra = '') => {
   ok('director (triad): judge picks from a real merged pool', tres.mode === 'triad' && tres.pool.length > 0 && tres.pool.every((r) => db.getSound(r.id) != null));
   ok('director (triad): returns judged cue sheet in 3 steps', /judged pick/.test(tres.text) && tres.steps === 3);
 
+  // 2f2. Director reaches the ONLINE library (Freesound) when wired — hits pool as real rows.
+  const { buildTools } = require('../src/director');
+  ok('director: search_freesound tool offered only when remoteSearch is wired',
+    buildTools(true).some((t) => t.function.name === 'search_freesound') && !buildTools(false).some((t) => t.function.name === 'search_freesound'));
+  let fturn = 0;
+  const fsChat = async () => {
+    fturn++;
+    if (fturn === 1) return { message: { role: 'assistant', content: null, tool_calls: [{ id: 'f1', type: 'function', function: { name: 'search_freesound', arguments: JSON.stringify({ query: 'tension' }) } }] }, usage: { prompt_tokens: 5, completion_tokens: 2 } };
+    return { message: { role: 'assistant', content: '**Online Tension.wav** — CC-BY, credit required.' }, usage: { prompt_tokens: 4, completion_tokens: 2 } };
+  };
+  const remoteSearch = async () => {
+    const rid = db.upsertMany([{ source: 'freesound', source_id: 'fs-tension-1', name: 'Online Tension.wav', url: 'http://x/p.mp3', license: 'http://creativecommons.org/licenses/by/4.0/', tags: 'tension dark bed' }])[0];
+    return { count: 1, results: [db.getSound(rid)] };
+  };
+  const fres = await runDirector({ db, sidecar, clapReady: false, messages: [{ role: 'user', content: 'tension bed' }], chat: fsChat, remoteSearch });
+  ok('director: online Freesound hits land in the candidate pool as real rows', fres.pool.some((r) => r.source === 'freesound') && fres.pool.every((r) => db.getSound(r.id) != null));
+
   // 2g. Bake-off honesty checker — the guard against fabricated filenames.
   const { honestyReport } = require('./director-bakeoff');
   const hp = [{ name: 'Thunder Clap.wav' }, { name: 'Rain Light.wav' }];

@@ -163,6 +163,15 @@ ipcMain.handle('director:chat', async (_e, { messages, opts }) => {
       model: opts?.model || undefined,
       retrieverModel: opts?.retrieverModel || undefined,
       apiKey,
+      // Give the Director the online library too — folds Freesound hits into the
+      // index so its picks become real, draggable rows (previews cache on drag).
+      remoteSearch: async (query, limit) => {
+        const p = providers.get('freesound');
+        if (!p || !p.available()) return { error: 'Freesound unavailable (no API key).', results: [] };
+        const res = await p.search(query, { page: 1, pageSize: Math.min(limit || 20, 40) });
+        db.upsertMany(res.results || []);
+        return { count: res.count, results: db.search(query, { source: 'freesound', limit: limit || 20 }) };
+      },
       onEvent: (evt) => win?.webContents.send('director:event', evt),
     });
     return { text: r.text, pool: r.pool, steps: r.steps, usage: r.usage, mode: r.mode };
