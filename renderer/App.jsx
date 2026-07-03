@@ -45,6 +45,8 @@ export default function App() {
   const [aiInstalled, setAiInstalled] = useState(false);
   const [genreList, setGenreList] = useState([]);
   const [filters, setFilters] = useState({ dur: null, bpm: null, genre: null, vocals: null });
+  const [autoAnalyze, setAutoAnalyze] = useState(() => localStorage.getItem('akasi.autoAnalyze') !== '0');
+  useEffect(() => { localStorage.setItem('akasi.autoAnalyze', autoAnalyze ? '1' : '0'); }, [autoAnalyze]);
   const [stats, setStats] = useState({ total: 0, favorites: 0, music: 0 });
   const [providers, setProviders] = useState([]);
   const [folders, setFolders] = useState([]);
@@ -298,11 +300,13 @@ export default function App() {
   async function addFolders() {
     setBusy('Scanning…');
     window.akasi.onScanProgress?.((p) => setBusy(`Scanning ${p.done}/${p.total}`));
-    await window.akasi.addFolders();
+    const r = await window.akasi.addFolders();
     setBusy(null);
     setFolders(await window.akasi.listFolders());
     await loadMeta();
     refresh();
+    // Auto-enrich newly-scanned files in the background (incremental — only new ones).
+    if (r && !r.canceled && autoAnalyze && aiInstalled) runAnalyze();
   }
 
   async function toggleFav(s) {
@@ -429,8 +433,13 @@ export default function App() {
           )}
           {aiReady && !remoteMode && <span className="ai-badge" title="Semantic AI search active — describe the sound you want">AI</span>}
           {aiInstalled && !remoteMode && (
-            <button className="credits-btn" title="Analyze library — detect BPM, key, genre, vocals + build the AI search index"
-              onClick={runAnalyze}>⚡ Analyze</button>
+            <span className="analyze-group">
+              <button className="credits-btn" title="Analyze library — detect BPM, key, genre, vocals + build the AI search index"
+                onClick={runAnalyze}>⚡ Analyze</button>
+              <button className={`auto-toggle ${autoAnalyze ? 'on' : ''}`}
+                title={autoAnalyze ? 'Auto-analyze new folders on import — ON' : 'Auto-analyze new folders on import — OFF'}
+                onClick={() => setAutoAnalyze((v) => !v)}>auto</button>
+            </span>
           )}
           {creditsScope && results.length > 0 && (
             <button
