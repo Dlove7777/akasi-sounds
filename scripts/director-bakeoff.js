@@ -87,8 +87,9 @@ async function main() {
   if (!fs.existsSync(dbPath)) { console.error(`DB not found at ${dbPath} — launch the app once.`); process.exit(1); }
   const db = openDb(dbPath);
 
-  let clapReady = false;
-  if (sidecar.available()) { try { await sidecar.startClap(); clapReady = true; } catch { /* keyword-only */ } }
+  // Keyword search only — CLAP warm-up deadlocks under ELECTRON_RUN_AS_NODE and the
+  // semantic layer doesn't change the axes we rank (honesty / tool-discipline / cost).
+  const clapReady = false;
 
   const quick = process.argv.includes('--quick');
   const briefs = quick ? BRIEFS.slice(0, 2) : BRIEFS;
@@ -132,19 +133,23 @@ async function main() {
   }
   db.close();
 
-  // Rank: honesty desc, then tool-discipline (fewer steps) asc, then cost asc.
-  rows.sort((a, b) => b.honestyRate - a.honestyRate || a.avgSteps - b.avgSteps || a.avgCost - b.avgCost);
+  // Rank: PRODUCTIVE configs first (a run that surfaced 0 candidates and made no
+  // picks is trivially "honest" but useless — it must not win), then honesty desc,
+  // then tool-discipline (fewer steps) asc, then cost asc.
+  const productive = (r) => (r.avgPool > 0 ? 1 : 0);
+  rows.sort((a, b) => productive(b) - productive(a) || b.honestyRate - a.honestyRate || a.avgSteps - b.avgSteps || a.avgCost - b.avgCost);
 
   const md = [];
   md.push('# Music Director — Model & Architecture Bake-off\n');
   md.push(`Ran ${briefs.length} briefs × ${MODELS.length} models × ${MODES.length} modes against the live library. `);
-  md.push('Ranked on **honesty** (no fabricated filenames) → **tool-discipline** (fewer steps) → **cost/run**. Reasoning depth deliberately not scored.\n');
+  md.push('Ranked on **honesty** (no fabricated filenames) → **tool-discipline** (fewer steps) → **cost/run**. Reasoning depth deliberately not scored. ');
+  md.push('Search ran in **keyword mode** (semantic CLAP layer off in the harness); this affects candidate pools equally across models, not the ranking axes.\n');
   md.push('| Rank | Model | Mode | Honesty | Avg steps | Avg cand | Avg cost/run | Avg latency | Errors |');
   md.push('|---|---|---|---|---|---|---|---|---|');
   rows.forEach((r, i) => {
     md.push(`| ${i + 1} | \`${r.model}\` | ${r.mode} | ${(r.honestyRate * 100).toFixed(0)}% | ${r.avgSteps} | ${r.avgPool} | $${r.avgCost.toFixed(5)} | ${r.avgLatency}ms | ${r.errors} |`);
   });
-  const winner = rows.find((r) => r.errors === 0) || rows[0];
+  const winner = rows.find((r) => r.errors === 0 && r.avgPool > 0) || rows.find((r) => r.errors === 0) || rows[0];
   md.push(`\n## Recommendation\n\nDefault: **\`${winner.model}\`** in **${winner.mode}** mode — ${(winner.honestyRate * 100).toFixed(0)}% honest, ${r0(winner.avgSteps)} avg steps, $${winner.avgCost.toFixed(5)}/run.\n`);
   md.push('\n## Sample outputs\n');
   for (const r of rows) {

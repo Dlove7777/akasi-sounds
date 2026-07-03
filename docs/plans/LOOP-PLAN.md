@@ -68,10 +68,10 @@ Shortlist: `google/gemini-3-flash-preview` (default), `z-ai/glm-5.2` (verified l
 - `scripts/director-bakeoff.js` (runs under ELECTRON_RUN_AS_NODE vs real app DB, read-only): for each (brief × model × mode) record steps, `usage` tokens→cost, latency, and **honesty** = every path/id in the final answer exists in DB. ~6 briefs. Emit `docs/plans/DIRECTOR-BAKEOFF-RESULTS.md` ranked on honesty > tool-discipline > cost (NOT reasoning depth).
 - Test: smoke — triad mode with mock retriever+judge returns picks strictly ⊆ real pool.
 
-### [ ] 7. Run bake-off → pick default + wire → STOP
+### [x] 7. Run bake-off → pick default + wire → STOP — DONE (loop complete)
 - Run `scripts/director-bakeoff.js` across the candidate models (real OpenRouter calls; keep total spend small — few briefs). Write ranked results + a one-line recommendation into `DIRECTOR-BAKEOFF-RESULTS.md`.
 - Wire the chosen default `{model, mode}` into `src/director.js` / main.js.
 - **STOP the loop.** Do NOT build: generative Music Director (ACE-Step on VIDI), RAG knowledge-grounding, or a deeper agent swarm. Final message: summarize what shipped and recommend Dennis run **`/ce-plan`** with fresh context for that heavy phase (per handoff planning guidance).
 
 ---
-**Last iteration:** #6 Bake-off harness — test:core 82/82, renderer build clean. `scripts/director-bakeoff.js` (`npm run bakeoff`) runs {5 models × 2 modes × 6 briefs} vs the live DB, scoring honesty→tool-discipline→cost, writes DIRECTOR-BAKEOFF-RESULTS.md. Exported pure `honestyReport(text,pool)` smoke-tested (real pick honest / invented filename flagged / emphasis not mis-flagged). Next: #7 RUN bakeoff (real OpenRouter calls) → pick+wire default → STOP + recommend /ce-plan.
+**Last iteration:** #7 Bake-off RUN — test:core 82/82, renderer build clean. **LOOP COMPLETE.** Ran real OpenRouter matrix (5 models × 2 modes × 2 briefs). Fixed 2 real bugs found: (a) `sidecar.startClap()` deadlocks under ELECTRON_RUN_AS_NODE → harness runs keyword-only; (b) em-dash in `X-Title` header broke every fetch (latin1) + added AbortController fetch timeout. Result: **default `google/gemini-3-flash-preview` grounded** (100% honest, richest pools, usable cue sheets, ~$0.006/run). deepseek disqualified (fabrication); triad unevaluated (needs semantic search on). Fixed the ranker to rank productive (cand>0) configs first. **STOP gate reached — generative/ACE-Step + RAG-grounding + deeper agent-swarm = /ce-plan with fresh context.**

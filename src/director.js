@@ -22,8 +22,11 @@
 const { blendedSearch } = require('./search');
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const DEFAULT_MODEL = 'google/gemini-3-flash-preview'; // top verified candidate; confirm via bake-off (iter 7)
-const DEFAULT_RETRIEVER_MODEL = 'deepseek/deepseek-v4-flash'; // cheap retriever for triad mode
+// Bake-off winner (grounded mode): 100% honest, richest real pools, usable cue sheets,
+// ~$0.006/run. See docs/plans/DIRECTOR-BAKEOFF-RESULTS.md. deepseek was disqualified
+// (fabricated a filename); glm-5.2 too slow (65s); haiku honest but 4× the cost.
+const DEFAULT_MODEL = 'google/gemini-3-flash-preview';
+const DEFAULT_RETRIEVER_MODEL = 'deepseek/deepseek-v4-flash'; // cheap retriever for triad (needs semantic search — unevaluated)
 const MAX_STEPS = 12;
 
 const SYSTEM = `You are Dennis's music supervisor with live access to his personal sound + music library through tools. Turn any brief into a tight cue sheet of REAL files he can drop straight into an edit.
@@ -135,18 +138,29 @@ async function dispatch(name, args, ctx) {
 
 /* ------------------------------ OpenRouter -------------------------------- */
 
-function makeOpenRouterChat({ apiKey, model }) {
+function makeOpenRouterChat({ apiKey, model, timeoutMs = 90_000 }) {
   return async function chat(messages, tools) {
-    const res = await fetch(OPENROUTER_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://akasilabs.com',
-        'X-Title': 'Akasi Sounds — Music Director',
-      },
-      body: JSON.stringify({ model, messages, tools, temperature: 0.4 }),
-    });
+    // Hard timeout so a hung provider can never freeze the chat (or the bake-off).
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), timeoutMs);
+    let res;
+    try {
+      res = await fetch(OPENROUTER_URL, {
+        method: 'POST',
+        signal: ac.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://akasilabs.com',
+          'X-Title': 'Akasi Sounds - Music Director',
+        },
+        body: JSON.stringify({ model, messages, tools, temperature: 0.4 }),
+      });
+    } catch (e) {
+      throw new Error(ac.signal.aborted ? `OpenRouter timeout after ${timeoutMs}ms` : String(e.message || e));
+    } finally {
+      clearTimeout(t);
+    }
     if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${(await res.text().catch(() => '')).slice(0, 300)}`);
     const j = await res.json();
     return { message: j.choices?.[0]?.message || {}, usage: j.usage || null };
