@@ -365,6 +365,13 @@ const ok = (label, cond, extra = '') => {
   const pixabay = require('../src/providers/pixabay');
   ok('pixabay provider is an inert stub (unavailable until headless)', pixabay.available() === false);
 
+  // 2f4. Scoring Playbook grounding — present in the director's system context, honesty intact.
+  const { SCORING_PLAYBOOK, PLAYBOOK_SENTINEL } = require('../src/playbook');
+  const director = require('../src/director');
+  ok('playbook: sentinel + all four delivery formats present', SCORING_PLAYBOOK.includes(PLAYBOOK_SENTINEL) &&
+    ['Film', 'TV', 'Commercial', 'Short-form'].every((f) => SCORING_PLAYBOOK.includes(f)));
+  ok('playbook: wired into director SYSTEM + JUDGE_SYSTEM', director.SYSTEM.includes(PLAYBOOK_SENTINEL) && director.JUDGE_SYSTEM.includes(PLAYBOOK_SENTINEL));
+
   // 2g. Bake-off honesty checker — the guard against fabricated filenames.
   const { honestyReport } = require('./director-bakeoff');
   const hp = [{ name: 'Thunder Clap.wav' }, { name: 'Rain Light.wav' }];

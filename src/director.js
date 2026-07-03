@@ -20,6 +20,7 @@
  * mock; prod uses the built-in OpenRouter fetch).
  */
 const { blendedSearch } = require('./search');
+const { SCORING_PLAYBOOK } = require('./playbook');
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 // Bake-off winner (grounded mode): 100% honest, richest real pools, usable cue sheets,
@@ -51,9 +52,13 @@ How to answer:
 - If the library honestly lacks a good fit (e.g. it's SFX-heavy and has no real tension bed), SAY SO plainly and offer the closest usable option as a clearly-labeled compromise — do not dress up an SFX as a bed.
 - Per pick: **exact file name** — one line on why it fits (mood / tempo / instrumentation), then \`BPM · key · genre\`.
 - Lead with your top recommendation. Flag licensing only when it matters (CC-BY needs credit, CC-BY-NC is not client-safe).
-- NEVER invent a sound. Recommend ONLY files the tools returned, by their exact name. Be concise — an editor wants picks, not prose.`;
+- NEVER invent a sound. Recommend ONLY files the tools returned, by their exact name. Be concise — an editor wants picks, not prose.
 
-const JUDGE_SYSTEM = `You are Dennis's music supervisor. You are given a music brief and a POOL of REAL candidate files already retrieved from his library. Do NOT search — pick the best 3-6 from the pool ONLY, favoring variety over near-duplicates. Per pick: **name** — one line on why it fits, then \`BPM · key · genre\`. Lead with your top pick. NEVER invent a file; reference each by its exact name. Concise.`;
+${SCORING_PLAYBOOK}`;
+
+const JUDGE_SYSTEM = `You are Dennis's music supervisor. You are given a music brief and a POOL of REAL candidate files already retrieved from his library. Do NOT search — pick the best 3-6 from the pool ONLY, favoring variety over near-duplicates. Per pick: **name** — one line on why it fits, then \`BPM · key · genre\`. Lead with your top pick. NEVER invent a file; reference each by its exact name. Concise.
+
+${SCORING_PLAYBOOK}`;
 
 /* ------------------------------- tool schema ------------------------------- */
 
@@ -301,4 +306,4 @@ async function runTriad({ chat, retrieverChat: injectedRetriever, ctx, pool, bri
   return { text, pool: [...pool.values()], steps: 3, usage: usageTotal, mode: 'triad' };
 }
 
-module.exports = { runDirector, TOOLS, buildTools, DEFAULT_MODEL, DEFAULT_RETRIEVER_MODEL, dispatch, slim, makeOpenRouterChat };
+module.exports = { runDirector, TOOLS, buildTools, DEFAULT_MODEL, DEFAULT_RETRIEVER_MODEL, dispatch, slim, makeOpenRouterChat, SYSTEM, JUDGE_SYSTEM };
