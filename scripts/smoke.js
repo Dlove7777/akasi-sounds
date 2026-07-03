@@ -372,6 +372,27 @@ const ok = (label, cond, extra = '') => {
     ['Film', 'TV', 'Commercial', 'Short-form'].every((f) => SCORING_PLAYBOOK.includes(f)));
   ok('playbook: wired into director SYSTEM + JUDGE_SYSTEM', director.SYSTEM.includes(PLAYBOOK_SENTINEL) && director.JUDGE_SYSTEM.includes(PLAYBOOK_SENTINEL));
 
+  // 2f5. Tier-1 generation prompt-writer (pure builder + director tool).
+  const genprompt = require('../src/genprompt');
+  const gpBed = genprompt.buildGenerationPrompt({ brief: 'a tense instrumental bed under 90 BPM for a promo' });
+  ok('genprompt: brief → structured prompt (instrumental, tension, bed duration)',
+    gpBed.caption.length > 0 && gpBed.instrumental === true && gpBed.genre === 'Tension' && gpBed.suggestedDurationSec === 60);
+  const gpSample = genprompt.buildGenerationPrompt({ brief: 'make something like this', sample: { genre: 'Lo-Fi', vocals: 0, bpm: 82, key: 'Am' } });
+  ok('genprompt: analyzed sample attributes override brief guesses',
+    gpSample.genre === 'Lo-Fi' && gpSample.bpm === 82 && /82 BPM/.test(gpSample.caption) && /Am/.test(gpSample.caption));
+  const gpSting = genprompt.buildGenerationPrompt({ brief: 'a short cinematic logo sting at 128 bpm' });
+  ok('genprompt: sting duration + explicit BPM parsed', gpSting.suggestedDurationSec === 8 && gpSting.bpm === 128 && gpSting.genre === 'Cinematic');
+  // Director tool path (mock LLM calls write_generation_prompt, brief-only, no sample).
+  let wgpTurn = 0;
+  const wgpChat = async () => {
+    wgpTurn++;
+    if (wgpTurn === 1) return { message: { role: 'assistant', content: null, tool_calls: [{ id: 'w1', type: 'function', function: { name: 'write_generation_prompt', arguments: JSON.stringify({ brief: 'dark ambient underscore' }) } }] }, usage: { prompt_tokens: 4, completion_tokens: 2 } };
+    return { message: { role: 'assistant', content: 'Here is a generation prompt you can use.' }, usage: { prompt_tokens: 3, completion_tokens: 2 } };
+  };
+  const wgpRes = await runDirector({ db, sidecar, clapReady: false, messages: [{ role: 'user', content: 'generate a dark ambient bed' }], chat: wgpChat });
+  ok('director: write_generation_prompt tool runs without a live generator', /generation prompt/.test(wgpRes.text) && wgpRes.steps === 2);
+  ok('director: write_generation_prompt is offered in the base toolset', buildTools(false).some((t) => t.function.name === 'write_generation_prompt'));
+
   // 2g. Bake-off honesty checker — the guard against fabricated filenames.
   const { honestyReport } = require('./director-bakeoff');
   const hp = [{ name: 'Thunder Clap.wav' }, { name: 'Rain Light.wav' }];

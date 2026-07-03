@@ -163,6 +163,14 @@ ipcMain.handle('director:chat', async (_e, { messages, opts }) => {
       model: opts?.model || undefined,
       retrieverModel: opts?.retrieverModel || undefined,
       apiKey,
+      // Ground a generation prompt in a real analyzed reference file (CLAP + librosa).
+      analyzeSample: async (p) => {
+        if (!sidecar.available() || !p || !fs.existsSync(p)) return null;
+        const c = await sidecar.classify(p).catch(() => null);
+        const dsp = await sidecar.analyzeBatch([p]).catch(() => new Map());
+        const d = dsp.get(p) || {};
+        return c && !c.error ? { genre: c.genre, vocals: c.vocals ?? null, bpm: d.bpm ?? null, key: d.key ?? null } : null;
+      },
       // Give the Director every connected online library — folds hits from all
       // available providers (Freesound SFX + Jamendo music) into the index so its
       // picks become real, draggable rows (previews cache on drag).

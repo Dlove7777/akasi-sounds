@@ -21,6 +21,7 @@
  */
 const { blendedSearch } = require('./search');
 const { SCORING_PLAYBOOK } = require('./playbook');
+const genprompt = require('./genprompt');
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 // Bake-off winner (grounded mode): 100% honest, richest real pools, usable cue sheets,
@@ -46,6 +47,8 @@ How to work:
 - Apply the filters the brief states: tempo words → bpmMin/bpmMax (chill <90, mid 90-120, driving 120+); "short sting" → durMax; "full bed" → durMin (a bed is usually >20s, not a 1-second file).
 - If a filtered search is thin, WIDEN (drop the bpm or duration filter) and search again before settling — don't grab a weak match just to fill the sheet. Use library_stats to see available genres.
 - Then STOP searching and write the cue sheet.
+
+GENERATION: when the library AND online genuinely lack a fit, or the user asks to create/generate a track, call write_generation_prompt({brief}) to draft a ready-to-use generation prompt (paste into ACE-Step/Suno, or generate in-app when VIDI is connected). Pass samplePath to ground it in an analyzed reference. Offer this as a next step rather than forcing a weak library pick.
 
 How to answer:
 - Pick the best 2-6 that genuinely fit, favoring variety over near-duplicates. Fewer strong picks beat padding with weak ones.
@@ -100,6 +103,22 @@ const TOOLS = [
       name: 'library_stats',
       description: 'Totals + available genres, to orient before searching.',
       parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'write_generation_prompt',
+      description:
+        "Draft a ready-to-use MUSIC GENERATION prompt (for ACE-Step / Suno / Udio, or in-app generation) when the library and online sources lack a fit, or the user asks to create/generate a track. Returns a structured prompt (caption, duration, bpm, genre, instrumental). Optionally pass samplePath to ground it in an analyzed reference file.",
+      parameters: {
+        type: 'object',
+        properties: {
+          brief: { type: 'string', description: 'What to generate — mood, genre, tempo, use.' },
+          samplePath: { type: 'string', description: 'Optional path to a reference audio file to analyze and match.' },
+        },
+        required: ['brief'],
+      },
     },
   },
 ];
@@ -171,6 +190,13 @@ async function dispatch(name, args, ctx) {
   }
   if (name === 'library_stats') {
     return JSON.stringify({ ...db.stats(), genres: db.genres() });
+  }
+  if (name === 'write_generation_prompt') {
+    let sample = null;
+    if (args.samplePath && ctx.analyzeSample) {
+      try { sample = await ctx.analyzeSample(String(args.samplePath)); } catch { /* brief-only fallback */ }
+    }
+    return JSON.stringify({ generationPrompt: genprompt.buildGenerationPrompt({ brief: args.brief, sample }) });
   }
   if (name === 'search_online') {
     if (!ctx.remoteSearch) return JSON.stringify({ error: 'Online search unavailable (no provider/API key).' });

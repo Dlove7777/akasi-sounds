@@ -16,7 +16,8 @@
 - [ ] U10 Project-memory house-style corpus (cue_history) — buildable now
 
 ## Notes
-- VIDI reachability probe: (pending)
+- VIDI (ssh alias `vidi`, user dlove): Windows/PowerShell over SSH (NO bash, no `||`), **RTX 4070 Laptop 8GB VRAM** (7.9GB free), Python 3.12.7, git 2.54, **NO docker**. → native `uv` install, **2B-turbo** variant only (XL needs 24GB). Deploy via scp'd .ps1 (no heredoc over SSH). ACE-Step: `git clone ACE-Step-1.5` + `uv sync`; launch `uv run acestep-api` (:8001, HF auto-download ~4.7GB); 8GB `.env`: ACESTEP_CONFIG_PATH=acestep-v15-turbo, ACESTEP_LM_MODEL_PATH=acestep-5Hz-lm-0.6B.
+- [x] U1 done (bdd0619, test:core 88/88).
 - Baseline: test:core 86/86, main @ 4435e77 + subsequent (Jamendo/Freesound director), plan committed.
 - U6 live end-to-end generation may be the ONE thing gated on hardware; U7/U8 land green with mock client either way.
 
