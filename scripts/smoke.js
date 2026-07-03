@@ -411,8 +411,9 @@ const ok = (label, cond, extra = '') => {
     db, { bytes: Buffer.from('RIFF....WAVEmockpcmdata'), ext: 'wav', caption: 'dark ambient tension bed', durationSec: 30 }, genSaveDir
   );
   const genRow = db.getSound(genId);
-  ok('generate.materialize → source=generate music row, MIT license, file on disk',
-    genRow.source === 'generate' && genRow.kind === 'music' && genRow.license === 'ACE-Step 1.5 / MIT' && fs.existsSync(genRow.path));
+  ok('generate.materialize → source=generate music row, Stability-licensed, file on disk',
+    genRow.source === 'generate' && genRow.kind === 'music' && /Stable Audio 3/.test(genRow.license) && fs.existsSync(genRow.path));
+  ok('generate row carries "Powered by Stability AI" attribution', /Powered by Stability AI/.test(genRow.attribution));
   ok('generate row classifies as "generated" (client-safe)', classifyLicense(genRow.license) === 'generated');
   ok('generate provider is NOT registered in search_online (no GPU fan-out)', !require('../src/providers').all().some((p) => p.id === 'generate'));
 

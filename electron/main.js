@@ -177,7 +177,7 @@ async function runGeneration(spec, onStatus) {
 
 ipcMain.handle('generate:status', () => ({ available: generateProvider.available(), url: generateProvider.baseUrl() || null }));
 ipcMain.handle('generate:run', async (_e, spec) => {
-  if (!generateProvider.available()) return { error: 'Generation unavailable — set VIDI_ACESTEP_URL in ~/.secrets.env.' };
+  if (!generateProvider.available()) return { error: 'Generation unavailable — set STABLE_AUDIO_URL in ~/.secrets.env.' };
   try {
     const row = await runGeneration(spec || {}, (s) => win?.webContents.send('generate:progress', { status: s }));
     const { embedding, ...clean } = row;

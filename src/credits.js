@@ -9,7 +9,7 @@
 function classifyLicense(l) {
   if (!l || l === 'local') return 'local';
   const s = String(l).toLowerCase();
-  if (/apache|ace-step|generated/.test(s)) return 'generated';
+  if (/apache|ace-step|stable ?audio|stability|generated/.test(s)) return 'generated';
   if (/nc\b|non-?commercial|by-nc/.test(s)) return 'cc-by-nc';
   if (/zero|cc0|publicdomain|public domain/.test(s)) return 'cc0';
   if (/creativecommons|cc[- ]by|licenses\/by/.test(s)) return 'cc-by';
@@ -19,7 +19,7 @@ function classifyLicense(l) {
 const GROUP_LABELS = {
   'cc-by': 'Creative Commons — attribution required',
   cc0: 'CC0 / Public domain — no attribution required',
-  generated: 'Generated in-app (Apache-2.0 model)',
+  generated: 'Generated in-app (self-hosted, commercially-licensed model)',
   local: 'Own / licensed library files',
   other: 'Other licenses — review manually',
 };
