@@ -26,6 +26,7 @@ export default function App() {
   const [remoteMode, setRemoteMode] = useState(false); // provider id | false
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
+  const [similarOf, setSimilarOf] = useState(null); // seed sound when in "Find Similar" mode
   const [selectedId, setSelectedId] = useState(null);
   const [auditionSound, setAuditionSound] = useState(null);
   const [cueToken, setCueToken] = useState(0);
@@ -132,11 +133,27 @@ export default function App() {
   }, [scope, activeCollectionId, filters]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = useCallback(async () => {
-    if (remoteMode) return;
+    if (remoteMode || similarOf) return; // "Find Similar" owns the result set until cleared
     setResults(await window.akasi.search(query, { ...scopeOpts(), sort, limit: 2000 }));
-  }, [remoteMode, query, scopeOpts, sort]);
+  }, [remoteMode, similarOf, query, scopeOpts, sort]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // Any change to the search context exits "Find Similar" mode (then refresh restores
+  // the normal result set). Entering similar mode changes none of these, so it sticks.
+  useEffect(() => { setSimilarOf(null); }, [scope, activeCollectionId, query, sort, filters]);
+
+  const findSimilar = useCallback(async (s) => {
+    if (!window.akasi.findSimilar) return;
+    setBusy(`Finding sounds like ${s.name}…`);
+    const r = await window.akasi.findSimilar(s.id, 60);
+    if (r?.error) { setBusy(r.error); setTimeout(() => setBusy(null), 2600); return; }
+    setSimilarOf(s);
+    setResults(r.results || []);
+    setSelectedId(null);
+    setChecked(new Set());
+    setBusy(null);
+  }, []);
 
   const loadMeta = useCallback(async () => {
     setStats(await window.akasi.stats());
@@ -516,9 +533,20 @@ export default function App() {
           </div>
         )}
 
+        {similarOf && (
+          <div className="similar-banner">
+            <span className="sim-ico">≋</span>
+            <span>Sounds similar to <b>{similarOf.name}</b></span>
+            <span className="sim-count">{results.length} match{results.length === 1 ? '' : 'es'}</span>
+            <button className="sim-clear" onClick={() => setSimilarOf(null)} title="Back to search">✕ clear</button>
+          </div>
+        )}
+
         {results.length === 0 ? (
           <div className="empty">
-            {remoteMode
+            {similarOf
+              ? 'No similar sounds found — try analyzing more of your library.'
+              : remoteMode
               ? `Type a query and press Enter to pull from ${remoteMode}.`
               : 'Nothing here — add a folder or search online.  ↑ / ↓ to audition · Space to play.'}
           </div>
@@ -527,13 +555,14 @@ export default function App() {
             rows={results}
             selectedId={selectedId}
             checked={checked}
-            resetKey={`${remoteMode}|${scope}|${activeCollectionId}|${query}`}
+            resetKey={`${remoteMode}|${scope}|${activeCollectionId}|${query}|${similarOf?.id ?? ''}`}
             musicColumns={musicColumns}
             collections={collections}
             onSelect={onRowSelect}
             onToggleFav={toggleFav}
             onAddToCollection={addToCollection}
             onEdit={editMeta}
+            onFindSimilar={!remoteMode ? findSimilar : undefined}
           />
         )}
 

@@ -115,6 +115,14 @@ if (!window.akasi) {
     updateMeta: async (sid, fields) => { const d = demo.find((x) => x.id === sid); if (d) Object.assign(d, fields); return 1; },
     setFavoriteMany: async (ids, on) => { ids.forEach((sid) => { const d = demo.find((x) => x.id === sid); if (d) d.favorite = on ? 1 : 0; }); return ids.length; },
     addManyToCollection: async (colId, ids) => { (membership[colId] = membership[colId] || new Set()); ids.forEach((sid) => membership[colId].add(sid)); return ids.length; },
+    findSimilar: async (sid, limit) => {
+      const seed = demo.find((x) => x.id === sid);
+      if (!seed) return { results: [] };
+      // Mock "timbre" similarity: same kind, prefer same genre, exclude self.
+      const pool = demo.filter((d) => d.id !== sid && d.kind === seed.kind);
+      pool.sort((a, b) => (b.genre === seed.genre) - (a.genre === seed.genre));
+      return { results: pool.slice(0, limit || 40).map((d, i) => ({ ...d, _sim: +(0.95 - i * 0.01).toFixed(3), _sem: 1 })) };
+    },
     startDragMany: () => {},
     exportCredits: async () => ({ path: '/mock/audio-credits.md', count: 4, flagged: 1, excluded: false }),
     aiStatus: async () => ({ installed: true, ready: true }),

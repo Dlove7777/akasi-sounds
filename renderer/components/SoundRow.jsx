@@ -192,7 +192,7 @@ function MetaEditor({ sound, onSave, onClose }) {
 }
 
 export default function SoundRow({
-  sound, height, selected, isChecked, musicColumns, collections, onSelect, onToggleFav, onAddToCollection, onEdit,
+  sound, height, selected, isChecked, musicColumns, collections, onSelect, onToggleFav, onAddToCollection, onEdit, onFindSimilar,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -233,6 +233,15 @@ export default function SoundRow({
       </span>
       <span className="row-lic">{shortLicense(s.license)}</span>
       <div className="row-actions">
+        {onFindSimilar && (
+          <button
+            className="add-btn sim-btn"
+            title="Find similar-sounding files (AI)"
+            onClick={(e) => { e.stopPropagation(); onFindSimilar(s); }}
+          >
+            ≋
+          </button>
+        )}
         <button
           className="add-btn edit-btn"
           title="Edit metadata"

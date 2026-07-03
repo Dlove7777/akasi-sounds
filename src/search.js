@@ -38,4 +38,31 @@ async function blendedSearch(db, sidecar, query, opts = {}, clapReady = false) {
   return scored.slice(0, opts.limit || 500).map(({ row, sem }) => ({ ...stripEmb(row), _sem: sem ? 1 : 0 }));
 }
 
-module.exports = { blendedSearch, stripEmb };
+/**
+ * Nearest-neighbour search by CLAP embedding — the engine behind "Find Similar"
+ * (in-library) and "match this sample". `targetArr` is a plain number[] (unit
+ * vector): from `db.getEmbeddingArray(id)` for a library row, or `sidecar.embedAudio`
+ * for an uploaded file. Pure cosine in JS — no CLAP warm-up needed for the in-library
+ * case since every analyzed row already carries its embedding blob.
+ */
+function similarByEmbedding(db, sidecar, targetArr, opts = {}) {
+  const limit = opts.limit || 40;
+  const excludeId = opts.excludeId;
+  if (!targetArr || !targetArr.length) return [];
+  const scored = [];
+  for (const row of db.allEmbeddings()) {
+    if (row.id === excludeId) continue;
+    scored.push({ id: row.id, score: sidecar.cosine(row.embedding, targetArr) });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  const top = scored.slice(0, limit);
+  const byId = db.getSoundsByIds(top.map((t) => t.id));
+  return top
+    .map((t) => {
+      const row = byId.get(t.id);
+      return row ? { ...stripEmb(row), _sim: +t.score.toFixed(3), _sem: 1 } : null;
+    })
+    .filter(Boolean);
+}
+
+module.exports = { blendedSearch, stripEmb, similarByEmbedding };

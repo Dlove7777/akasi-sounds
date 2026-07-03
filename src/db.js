@@ -371,6 +371,25 @@ class AkasiDb {
     return this.db.prepare('SELECT id, embedding FROM sounds WHERE embedding IS NOT NULL').all();
   }
 
+  /** One row's CLAP embedding as a plain number[] (for cosine), or null if un-analyzed. */
+  getEmbeddingArray(id) {
+    const r = this.db.prepare('SELECT embedding FROM sounds WHERE id = ?').get(id);
+    if (!r || !r.embedding) return null;
+    const buf = r.embedding;
+    return Array.from(new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4));
+  }
+
+  /** Hydrate many rows by id in one query → Map(id → row). Order-independent. */
+  getSoundsByIds(ids) {
+    const out = new Map();
+    if (!ids || !ids.length) return out;
+    const qs = ids.map(() => '?').join(',');
+    for (const r of this.db.prepare(`SELECT * FROM sounds WHERE id IN (${qs})`).all(...ids)) {
+      out.set(r.id, r);
+    }
+    return out;
+  }
+
   /** Distinct genres present (tag + AI) for the filter dropdown. */
   genres() {
     return this.db.prepare(

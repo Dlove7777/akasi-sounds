@@ -10,7 +10,7 @@ const OVERSCAN = 8;
  * jank-free. Selection is index-based so arrow-key audition can drive it from App.
  */
 export default function ResultsList({
-  rows, selectedId, checked, resetKey, onSelect, onToggleFav, onAddToCollection, onEdit, musicColumns, collections,
+  rows, selectedId, checked, resetKey, onSelect, onToggleFav, onAddToCollection, onEdit, onFindSimilar, musicColumns, collections,
 }) {
   const scrollRef = useRef(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -75,6 +75,7 @@ export default function ResultsList({
               onToggleFav={onToggleFav}
               onAddToCollection={onAddToCollection}
               onEdit={onEdit}
+              onFindSimilar={onFindSimilar}
             />
           ))}
         </div>

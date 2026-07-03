@@ -20,7 +20,7 @@ const mediaUrl = (absPath) => `akmedia://audio/${encodeURIComponent(absPath)}`;
 const { openDb } = require('../src/db');
 const { buildManifest } = require('../src/credits');
 const sidecar = require('../src/sidecar');
-const { blendedSearch } = require('../src/search');
+const { blendedSearch, similarByEmbedding } = require('../src/search');
 const providers = require('../src/providers');
 const freesound = require('../src/providers/freesound');
 const { scanFolder } = require('../src/indexer');
@@ -101,6 +101,14 @@ ipcMain.handle('lib:suggest', (_e, prefix) => db.suggest(prefix));
 ipcMain.handle('lib:update', (_e, { id, fields }) => db.updateMeta(id, fields || {}));
 ipcMain.handle('lib:favMany', (_e, { ids, on }) => db.setFavoriteMany(ids || [], !!on));
 ipcMain.handle('col:addMany', (_e, { collectionId, ids }) => db.addManyToCollection(collectionId, ids || []));
+
+// Find Similar (in-library): cosine of a row's stored CLAP embedding against the
+// whole analyzed library. No CLAP warm-up needed — the blobs are already on disk.
+ipcMain.handle('similar:byId', (_e, { id, limit }) => {
+  const target = db.getEmbeddingArray(id);
+  if (!target) return { error: 'This sound has no AI fingerprint yet — run ⚡ Analyze first.', results: [] };
+  return { results: similarByEmbedding(db, sidecar, target, { limit: limit || 40, excludeId: id }) };
+});
 
 /* -------------------------- IPC: collections -------------------------- */
 

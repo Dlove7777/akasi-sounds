@@ -148,6 +148,30 @@ const ok = (label, cond, extra = '') => {
   ok('genres() unions tag + AI genres', db.genres().includes('Ambient') && db.genres().includes('Cinematic'));
   ok('cosine on stored blob ≈ 1 for identical vector', Math.abs(sidecar.cosine(fakeEmb, new Float32Array(512).fill(0.044)) - 512 * 0.044 * 0.044) < 0.01);
 
+  // 2d3. Find Similar (in-library) — cosine nearest-neighbour over stored embeddings
+  const { similarByEmbedding } = require('../src/search');
+  const unit = (fill) => { const a = new Float32Array(512); fill(a); let n = 0; for (const x of a) n += x * x; n = Math.sqrt(n) || 1; for (let i = 0; i < 512; i++) a[i] /= n; return a; };
+  const embBuf = (v) => Buffer.from(v.buffer.slice(0));
+  const vT = unit((a) => { a[0] = 1; });
+  const vNear = unit((a) => { a[0] = 1; a[1] = 0.25; });
+  const vFar = unit((a) => { a[300] = 1; });
+  const [tId, nId, fId] = db.upsertMany([
+    { source: 'local', source_id: '/sim/target.wav', name: 'Sim Target.wav', kind: 'music', tags: 'target' },
+    { source: 'local', source_id: '/sim/near.wav', name: 'Sim Near.wav', kind: 'music', tags: 'near' },
+    { source: 'local', source_id: '/sim/far.wav', name: 'Sim Far.wav', kind: 'music', tags: 'far' },
+  ]);
+  db.setAnalysis(tId, { embedding: embBuf(vT) });
+  db.setAnalysis(nId, { embedding: embBuf(vNear) });
+  db.setAnalysis(fId, { embedding: embBuf(vFar) });
+  const targetArr = db.getEmbeddingArray(tId);
+  ok('getEmbeddingArray returns a 512-dim vector', Array.isArray(targetArr) && targetArr.length === 512 && Math.abs(targetArr[0] - 1) < 0.01);
+  const sim = similarByEmbedding(db, sidecar, targetArr, { excludeId: tId, limit: 5 });
+  ok('similarByEmbedding excludes the seed itself', !sim.some((r) => r.id === tId));
+  ok('similarByEmbedding ranks nearest first', sim[0]?.id === nId);
+  ok('similarByEmbedding ranks near above far', sim.findIndex((r) => r.id === nId) < sim.findIndex((r) => r.id === fId));
+  ok('similarByEmbedding tags rows with _sim score + strips embedding blob', sim[0]?._sim > 0.9 && sim[0]?.embedding === undefined);
+  ok('getSoundsByIds hydrates rows by id', db.getSoundsByIds([nId, fId]).get(nId)?.name === 'Sim Near.wav');
+
   // 2e. Credits manifest — the licensing deliverable
   const { buildManifest, classifyLicense } = require('../src/credits');
   ok('classifyLicense maps the license zoo', classifyLicense('http://creativecommons.org/licenses/by/4.0/') === 'cc-by' &&

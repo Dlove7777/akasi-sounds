@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('akasi', {
   updateMeta: (id, fields) => ipcRenderer.invoke('lib:update', { id, fields }),
   setFavoriteMany: (ids, on) => ipcRenderer.invoke('lib:favMany', { ids, on }),
   addManyToCollection: (collectionId, ids) => ipcRenderer.invoke('col:addMany', { collectionId, ids }),
+  findSimilar: (id, limit) => ipcRenderer.invoke('similar:byId', { id, limit }),
   startDragMany: (ids) => ipcRenderer.send('drag:startMany', ids),
   exportCredits: (opts) => ipcRenderer.invoke('credits:export', opts || {}),
 
