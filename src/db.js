@@ -83,6 +83,17 @@ CREATE TABLE IF NOT EXISTS collection_sounds (
   PRIMARY KEY (collection_id, sound_id)
 );
 CREATE INDEX IF NOT EXISTS idx_cs_sound ON collection_sounds(sound_id);
+
+-- Project memory: every completed Music Director cue, for house-style recall (the
+-- compounding moat). brief_embedding lets recall find the closest past briefs by CLAP.
+CREATE TABLE IF NOT EXISTS cue_history (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  brief          TEXT NOT NULL,
+  picks          TEXT,                 -- JSON array of sound ids picked/pooled
+  cue            TEXT,                 -- the final cue-sheet text
+  brief_embedding BLOB,               -- CLAP embedding of the brief (for recall)
+  created_at     INTEGER NOT NULL
+);
 `;
 
 // Columns added after the original V1 schema — ALTER them in for pre-existing DBs.
@@ -459,6 +470,25 @@ class AkasiDb {
       .prepare('SELECT collection_id FROM collection_sounds WHERE sound_id = ?')
       .all(soundId)
       .map((r) => r.collection_id);
+  }
+
+  /* ---------------------------- project memory ---------------------------- */
+
+  /** Persist a completed director cue. embedding = Float32 Buffer of the brief, or null. */
+  addCue({ brief, pickIds, cue, embedding }) {
+    return this.db.prepare(
+      'INSERT INTO cue_history(brief, picks, cue, brief_embedding, created_at) VALUES (?, ?, ?, ?, ?) RETURNING id'
+    ).get(brief, JSON.stringify(pickIds || []), cue || null, embedding || null, Date.now()).id;
+  }
+  getCue(id) {
+    return this.db.prepare('SELECT * FROM cue_history WHERE id = ?').get(id);
+  }
+  recentCues(limit = 5) {
+    return this.db.prepare('SELECT id, brief, picks, cue, created_at FROM cue_history ORDER BY created_at DESC LIMIT ?').all(limit);
+  }
+  /** Cue briefs that carry an embedding — the recall index. */
+  allCueEmbeddings() {
+    return this.db.prepare('SELECT id, brief_embedding AS embedding FROM cue_history WHERE brief_embedding IS NOT NULL').all();
   }
 
   addFolder(p) {

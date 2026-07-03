@@ -126,6 +126,15 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'recall_house_style',
+      description:
+        "Recall how Dennis scored SIMILAR briefs before — his accumulating house style. Returns the closest past cue sheets as CONTEXT (past brief + what he used), so you stay consistent with his established choices. Returns past cues, not files.",
+      parameters: { type: 'object', properties: { brief: { type: 'string' } }, required: ['brief'] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'lookup_scoring_ref',
       description:
         'Look up DEEPER scoring craft — music-theory→emotion, genre fingerprints, and format-specific scoring conventions (film/TV/commercial/short-form) — to ground a tricky curation call or a generation prompt. Returns reference TEXT (context), not files.',
@@ -251,6 +260,16 @@ async function dispatch(name, args, ctx) {
     for (const row of rows) if (!pool.has(row.id)) pool.set(row.id, row);
     onEvent?.({ type: 'pool', rows: [...pool.values()] });
     return JSON.stringify({ count: rows.length, results: rows.map((x) => ({ ...slim(x), sim: x._sim })) });
+  }
+  if (name === 'recall_house_style') {
+    const idx = db.allCueEmbeddings();
+    const recentFallback = () => JSON.stringify({ cues: db.recentCues(3).map((c) => ({ brief: c.brief, cue: String(c.cue || '').slice(0, 300) })) });
+    if (!idx.length || !ctx.clapReady) return recentFallback();
+    const r = await sidecar.embedText(String(args.brief || '')).catch(() => null);
+    if (!r || !r.embedding) return recentFallback();
+    const scored = idx.map((c) => ({ id: c.id, score: sidecar.cosine(c.embedding, r.embedding) })).sort((a, b) => b.score - a.score).slice(0, 3);
+    const cues = scored.map((s) => { const c = db.getCue(s.id); return c ? { brief: c.brief, cue: String(c.cue || '').slice(0, 300) } : null; }).filter(Boolean);
+    return JSON.stringify({ cues }); // context only — never files
   }
   if (name === 'lookup_scoring_ref') {
     const corpus = ctx.scoringCorpus || [];

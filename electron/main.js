@@ -237,6 +237,15 @@ ipcMain.handle('director:chat', async (_e, { messages, opts }) => {
       },
       onEvent: (evt) => win?.webContents.send('director:event', evt),
     });
+    // Project memory: persist the cue (+brief embedding) for house-style recall.
+    try {
+      const brief = [...(messages || [])].reverse().find((m) => m.role === 'user')?.content || '';
+      if (brief && r.text) {
+        let emb = null;
+        if (clapReady) { const e = await sidecar.embedText(brief).catch(() => null); if (e && e.embedding) emb = Buffer.from(new Float32Array(e.embedding).buffer); }
+        db.addCue({ brief, pickIds: (r.pool || []).map((x) => x.id), cue: r.text, embedding: emb });
+      }
+    } catch { /* memory is best-effort */ }
     return { text: r.text, pool: r.pool, steps: r.steps, usage: r.usage, mode: r.mode };
   } catch (e) {
     return { error: String(e.message || e) };

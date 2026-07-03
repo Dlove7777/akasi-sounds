@@ -52,39 +52,50 @@ async function generate(spec, opts = {}) {
   const durationSec = spec.durationSec || 30;
   const rel = await jpost('/release_task', {
     task_type: 'text2music',
-    caption: spec.caption,
     prompt: spec.caption,
+    caption: spec.caption,
     lyrics: spec.lyrics || '',
     audio_duration: durationSec,
     use_random_seed: spec.seed == null,
     seed: spec.seed ?? 0,
-    format: 'wav',
+    audio_format: 'wav', // WAV writes natively (no ffmpeg); mp3/flac need ffmpeg on the server
+    batch_size: 1, // 8GB VRAM — one at a time
+    inference_steps: spec.steps || 8, // turbo
   });
-  const taskId = pick(rel, 'task_id', 'taskId', 'id');
-  if (!taskId) throw new Error('ACE-Step: no task_id in release_task response');
+  const taskId = pick(rel, 'task_id', 'taskId', 'id') || pick(rel.data || {}, 'task_id', 'id');
+  if (!taskId) throw new Error(`ACE-Step: no task_id in release_task response: ${JSON.stringify(rel).slice(0, 200)}`);
   onStatus('queued');
 
-  const deadline = Date.now() + (opts.timeoutMs || 240000);
-  let audioPath = null;
+  // /query_result: status is an INT (1=success, 2=failure); the file path lives in a
+  // `file` field, often inside a JSON-string `result`. Parse tolerantly.
+  const deadline = Date.now() + (opts.timeoutMs || 300000);
+  let fileRef = null;
   while (Date.now() < deadline) {
     await sleep(opts.pollMs || 2500);
     const q = await jpost('/query_result', { task_id: taskId, taskId });
-    const status = pick(q, 'status', 'state') || 'running';
-    onStatus(status);
-    const done = status === 'done' || status === 'success' || status === 'finished' || q.finished === true || pick(q, 'path', 'audio_path', 'output_path');
-    if (pick(q, 'error') || status === 'failed' || status === 'error') throw new Error(`ACE-Step task failed: ${pick(q, 'error') || status}`);
-    if (done) {
-      audioPath = pick(q, 'path', 'audio_path', 'output_path') || pick(q.result || {}, 'path', 'audio_path');
-      if (audioPath) break;
+    let body = q.data || q;
+    if (typeof body.result === 'string') { try { body = { ...body, ...JSON.parse(body.result) }; } catch { /* leave */ } }
+    else if (body.result && typeof body.result === 'object') body = { ...body, ...body.result };
+    const item = Array.isArray(body.results) ? body.results[0] : (Array.isArray(body) ? body[0] : body);
+    const status = item && item.status != null ? item.status : (body.status != null ? body.status : pick(body, 'state'));
+    onStatus(String(status));
+    if (status === 2 || status === 'failed' || status === 'error' || pick(body, 'error')) {
+      throw new Error(`ACE-Step task failed: ${pick(body, 'error', 'message') || 'status ' + status}`);
     }
+    fileRef = (item && (item.file || item.path || item.audio_path)) || pick(body, 'file', 'path', 'audio_path');
+    if (fileRef || status === 1 || status === 'success') { if (fileRef) break; }
   }
-  if (!audioPath) throw new Error('ACE-Step generation timed out');
+  if (!fileRef) throw new Error('ACE-Step generation timed out');
 
+  // `file` may already be a "/v1/audio?path=..." URL, an absolute URL, or a raw path.
+  const url = /^https?:/i.test(fileRef) ? fileRef
+    : fileRef.startsWith('/') ? baseUrl() + fileRef
+    : `${baseUrl()}/v1/audio?path=${encodeURIComponent(fileRef)}`;
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), 60000);
   try {
-    const res = await fetch(`${baseUrl()}/v1/audio?path=${encodeURIComponent(audioPath)}`, { headers: headers(), signal: ac.signal });
-    if (!res.ok) throw new Error(`ACE-Step /v1/audio ${res.status}`);
+    const res = await fetch(url, { headers: headers(), signal: ac.signal });
+    if (!res.ok) throw new Error(`ACE-Step audio fetch ${res.status}`);
     return { bytes: Buffer.from(await res.arrayBuffer()), ext: 'wav', meta: { durationSec } };
   } finally { clearTimeout(t); }
 }

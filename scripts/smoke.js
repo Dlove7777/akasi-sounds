@@ -449,6 +449,20 @@ const ok = (label, cond, extra = '') => {
   ok('director: lookup_scoring_ref adds ZERO files to the pool (context only, honesty)', lrRes.pool.length === 0);
   ok('director: lookup_scoring_ref offered in the base toolset', buildTools(false).some((t) => t.function.name === 'lookup_scoring_ref'));
 
+  // 2f10. Project-memory house-style corpus (U10).
+  const cueId = db.addCue({ brief: 'a warm corporate uplift bed', pickIds: [mId], cue: '**Cinematic Bed.wav** — hopeful build. 90 · Cinematic', embedding: fakeEmb });
+  ok('cue_history: addCue persists + getCue round-trips picks/cue', db.getCue(cueId).cue.includes('hopeful build') && JSON.parse(db.getCue(cueId).picks).includes(mId));
+  ok('cue_history: recentCues + allCueEmbeddings index the cue', db.recentCues(5).some((c) => c.id === cueId) && db.allCueEmbeddings().some((c) => c.id === cueId));
+  let rhTurn = 0;
+  const rhChat = async () => {
+    rhTurn++;
+    if (rhTurn === 1) return { message: { role: 'assistant', content: null, tool_calls: [{ id: 'r1', type: 'function', function: { name: 'recall_house_style', arguments: JSON.stringify({ brief: 'corporate uplift' }) } }] }, usage: { prompt_tokens: 4, completion_tokens: 2 } };
+    return { message: { role: 'assistant', content: 'Consistent with your house style.' }, usage: { prompt_tokens: 3, completion_tokens: 2 } };
+  };
+  const rhRes = await runDirector({ db, sidecar, clapReady: false, messages: [{ role: 'user', content: 'score a corporate promo' }], chat: rhChat });
+  ok('director: recall_house_style adds ZERO files to the pool (context only, honesty)', rhRes.pool.length === 0);
+  ok('director: recall_house_style offered in the base toolset', buildTools(false).some((t) => t.function.name === 'recall_house_style'));
+
   // 2g. Bake-off honesty checker — the guard against fabricated filenames.
   const { honestyReport } = require('./director-bakeoff');
   const hp = [{ name: 'Thunder Clap.wav' }, { name: 'Rain Light.wav' }];
