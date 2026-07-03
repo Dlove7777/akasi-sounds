@@ -146,11 +146,11 @@ async function main() {
   }
   db.close();
 
-  // Rank: PRODUCTIVE configs first (a run that surfaced 0 candidates and made no
-  // picks is trivially "honest" but useless — it must not win), then honesty desc,
-  // then tool-discipline (fewer steps) asc, then cost asc.
-  const productive = (r) => (r.avgPool > 0 ? 1 : 0);
-  rows.sort((a, b) => productive(b) - productive(a) || b.honestyRate - a.honestyRate || a.avgSteps - b.avgSteps || a.avgCost - b.avgCost);
+  // Rank: honesty first, then CANDIDATE RICHNESS (avgPool desc — a config that
+  // surfaces more real, usable candidates beats one that makes 0-1 picks and is only
+  // trivially "honest"), then tool-discipline (fewer steps), then cost. Richness, not
+  // mere productive>0, is the signal: on a thin library, thorough retrieval is the win.
+  rows.sort((a, b) => b.honestyRate - a.honestyRate || b.avgPool - a.avgPool || a.avgSteps - b.avgSteps || a.avgCost - b.avgCost);
 
   const md = [];
   md.push('# Music Director — Model & Architecture Bake-off\n');
@@ -162,7 +162,8 @@ async function main() {
   rows.forEach((r, i) => {
     md.push(`| ${i + 1} | \`${r.model}\` | ${r.mode} | ${(r.honestyRate * 100).toFixed(0)}% | ${r.avgSteps} | ${r.avgPool} | $${r.avgCost.toFixed(5)} | ${r.avgLatency}ms | ${r.errors} |`);
   });
-  const winner = rows.find((r) => r.errors === 0 && r.avgPool > 0) || rows.find((r) => r.errors === 0) || rows[0];
+  // Winner = most honest, richest real pool (rows already sorted that way), no errors.
+  const winner = rows.find((r) => r.errors === 0 && r.avgPool >= 2) || rows.find((r) => r.errors === 0) || rows[0];
   md.push(`\n## Recommendation\n\nDefault: **\`${winner.model}\`** in **${winner.mode}** mode — ${(winner.honestyRate * 100).toFixed(0)}% honest, ${r0(winner.avgSteps)} avg steps, $${winner.avgCost.toFixed(5)}/run.\n`);
   md.push('\n## Sample outputs\n');
   for (const r of rows) {
