@@ -27,5 +27,23 @@
 - Baseline: test:core 86/86, main @ 4435e77 + subsequent (Jamendo/Freesound director), plan committed.
 - U6 live end-to-end generation may be the ONE thing gated on hardware; U7/U8 land green with mock client either way.
 
-## Morning test report
-(filled in at the end)
+## Morning test report (2026-07-02 overnight)
+
+**All 10 units shipped, test:core 64→108, main @ 026bf38, working tree clean, every unit pushed.**
+
+Restart the app to pick it up: `Ctrl-C`, then `npm run dev` (main-process changed).
+
+### Test instantly (no GPU, all live):
+1. 🎬 **Director** — now grounded in the Scoring Playbook. Ask "a tense instrumental bed under 90 BPM for a promo" → it searches local + Freesound + Jamendo, and when thin, **honestly offers a generation prompt** instead of forcing a weak pick.
+2. **"Draft me a generation prompt for a dark lo-fi bed"** → `write_generation_prompt` returns a copy-pasteable ACE-Step/Suno caption instantly (works with zero GPU).
+3. **"Find something that sounds like <a track>"** → `match_reference` (CLAP similarity).
+4. **≋** on a row → Find Similar; **⇪ Match sample** → drop an audio file.
+5. Deeper craft grounding (`lookup_scoring_ref`) + house-style memory (`recall_house_style`, builds up as you use it) run under the hood.
+
+### Generation (ACE-Step on VIDI) — DEPLOYED + WORKING, but slow on 8GB:
+- Server is live at `http://vidi-laptop:8001` (VIDI_ACESTEP_URL set in secrets). Ask the Director to "generate a 30s tense bed" and it will — the track lands as a draggable `source='generate'` row, MIT-licensed, analyzed.
+- **Caveat:** the RTX 4070 Laptop's 8GB forces INT8 + CPU-offload → generation is SLOW (several minutes/clip, GPU ~26% util). It's a VRAM limit, not a bug. For responsive gen, a bigger-VRAM box (or the non-offload config) is the path. The Tier-1 prompt-writer gives you the generation *value* instantly regardless (paste into Suno/ACE-Step).
+- To (re)start the VIDI server after a reboot: `ssh vidi 'powershell -File run-acestep.ps1'` (see services/vidi-acestep/).
+
+### Verdict from the fair (semantic-on) bake-off:
+- Default stays **google/gemini-3-flash-preview grounded** — richest real candidate pools; triad needs a richer library to win. Full write-up: DIRECTOR-BAKEOFF-RESULTS.md.
