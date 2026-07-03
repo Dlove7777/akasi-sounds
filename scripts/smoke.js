@@ -336,6 +336,16 @@ const ok = (label, cond, extra = '') => {
   ok('director (triad): judge picks from a real merged pool', tres.mode === 'triad' && tres.pool.length > 0 && tres.pool.every((r) => db.getSound(r.id) != null));
   ok('director (triad): returns judged cue sheet in 3 steps', /judged pick/.test(tres.text) && tres.steps === 3);
 
+  // 2g. Bake-off honesty checker — the guard against fabricated filenames.
+  const { honestyReport } = require('./director-bakeoff');
+  const hp = [{ name: 'Thunder Clap.wav' }, { name: 'Rain Light.wav' }];
+  const hGood = honestyReport('My top pick is **Thunder Clap.wav** — great storm hit.', hp);
+  ok('honestyReport: a real named pick is honest', hGood.honest && hGood.matched.length === 1 && hGood.fabricated.length === 0);
+  const hBad = honestyReport('Try **Epic Dragon Roar.wav** for the intro.', hp);
+  ok('honestyReport: an invented filename is flagged dishonest', !hBad.honest && hBad.fabricated.length === 1);
+  const hEmph = honestyReport('Here is my **top recommendation** from the pool.', hp);
+  ok('honestyReport: non-file emphasis is not mistaken for a claim', hEmph.honest && hEmph.claims.length === 0);
+
   db.close();
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log(`\n${pass} passed, ${fail} failed`);

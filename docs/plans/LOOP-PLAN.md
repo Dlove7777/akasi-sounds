@@ -63,7 +63,7 @@ Shortlist: `google/gemini-3-flash-preview` (default), `z-ai/glm-5.2` (verified l
 - `renderer/components/DirectorPanel.jsx` (NEW): right slide-out — chat log, input, and **live rows** (reuse SoundRow / a compact row) that audition + native-drag (`window.akasi.startDrag`). Toggle from a header button in App.jsx.
 - Test: smoke — `runDirector` with a **mock LLM** (inject a fake `chat` that emits one `search_sounds` call then a final) proves the tool dispatch returns real rows + no fabricated ids.
 
-### [ ] 6. Bake-off harness (A/B)  — NOTE: `mode:'triad'` ALREADY BUILT + tested in iter 5's src/director.js
+### [x] 6. Bake-off harness (A/B) — DONE  — NOTE: `mode:'triad'` ALREADY BUILT + tested in iter 5's src/director.js
 - ~~`src/director.js`: add `mode:'triad'`~~ DONE in iter 5 (keyword-librarian + mood-supervisor retrievers → judge). This iteration = just the harness + smoke.
 - `scripts/director-bakeoff.js` (runs under ELECTRON_RUN_AS_NODE vs real app DB, read-only): for each (brief × model × mode) record steps, `usage` tokens→cost, latency, and **honesty** = every path/id in the final answer exists in DB. ~6 briefs. Emit `docs/plans/DIRECTOR-BAKEOFF-RESULTS.md` ranked on honesty > tool-discipline > cost (NOT reasoning depth).
 - Test: smoke — triad mode with mock retriever+judge returns picks strictly ⊆ real pool.
@@ -74,4 +74,4 @@ Shortlist: `google/gemini-3-flash-preview` (default), `z-ai/glm-5.2` (verified l
 - **STOP the loop.** Do NOT build: generative Music Director (ACE-Step on VIDI), RAG knowledge-grounding, or a deeper agent swarm. Final message: summarize what shipped and recommend Dennis run **`/ce-plan`** with fresh context for that heavy phase (per handoff planning guidance).
 
 ---
-**Last iteration:** #5 Music Director chat — test:core 79/79, renderer build clean. `src/director.js` in-process tool loop (reuses blendedSearch), BOTH `grounded` + `triad` modes built & mock-tested. `director:chat` IPC streams live pool/tool events; `DirectorPanel.jsx` right slide-out with mode toggle + live draggable/auditionable candidate rows (picks highlighted). Default `google/gemini-3-flash-preview`. Next: #6 bake-off HARNESS only (triad already done).
+**Last iteration:** #6 Bake-off harness — test:core 82/82, renderer build clean. `scripts/director-bakeoff.js` (`npm run bakeoff`) runs {5 models × 2 modes × 6 briefs} vs the live DB, scoring honesty→tool-discipline→cost, writes DIRECTOR-BAKEOFF-RESULTS.md. Exported pure `honestyReport(text,pool)` smoke-tested (real pick honest / invented filename flagged / emphasis not mis-flagged). Next: #7 RUN bakeoff (real OpenRouter calls) → pick+wire default → STOP + recommend /ce-plan.
