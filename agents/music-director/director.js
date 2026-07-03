@@ -78,8 +78,11 @@ async function run(brief, dry) {
         const out = await client.callTool({ name: call.function.name, arguments: args });
         messages.push({ role: 'tool', tool_call_id: call.id, content: out.content[0].text });
       }
+      // Near the budget, force synthesis (mirrors Hermes' behavior) so an
+      // over-exploring model still delivers a cue sheet from what it has.
+      if (step === 9) messages.push({ role: 'user', content: 'Stop searching now. Write the final cue sheet from the results you already have.' });
     }
-    console.log('(stopped after 6 steps — no final answer)');
+    console.log('(stopped after 12 steps — no final answer)');
   } finally {
     await client.close();
   }
