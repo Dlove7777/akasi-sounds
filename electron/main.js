@@ -21,6 +21,7 @@ const { openDb } = require('../src/db');
 const { buildManifest } = require('../src/credits');
 const sidecar = require('../src/sidecar');
 const { blendedSearch, similarByEmbedding } = require('../src/search');
+const { runDirector } = require('../src/director');
 const providers = require('../src/providers');
 const freesound = require('../src/providers/freesound');
 const { scanFolder } = require('../src/indexer');
@@ -143,8 +144,32 @@ ipcMain.handle('col:forSound', (_e, soundId) => db.collectionsForSound(soundId))
 
 /* --------------------------- IPC: AI analysis -------------------------- */
 
-ipcMain.handle('ai:status', () => ({ installed: sidecar.available(), ready: clapReady }));
+ipcMain.handle('ai:status', () => ({ installed: sidecar.available(), ready: clapReady, director: !!process.env.OPENROUTER_API_KEY }));
 ipcMain.handle('lib:genres', () => db.genres());
+
+/* --------------------------- IPC: Music Director ----------------------- */
+
+// In-app Music Director chat. OpenRouter brain drives a tool loop over the REAL
+// library (blendedSearch in-process) — picks can only be files a tool returned.
+// Live pool/tool events stream to the renderer; the final cue sheet is the resolve.
+ipcMain.handle('director:chat', async (_e, { messages, opts }) => {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return { error: 'No OPENROUTER_API_KEY found — add it to ~/.secrets.env to use the Music Director.' };
+  try {
+    const r = await runDirector({
+      db, sidecar, clapReady,
+      messages: messages || [],
+      mode: opts?.mode || 'grounded',
+      model: opts?.model || undefined,
+      retrieverModel: opts?.retrieverModel || undefined,
+      apiKey,
+      onEvent: (evt) => win?.webContents.send('director:event', evt),
+    });
+    return { text: r.text, pool: r.pool, steps: r.steps, usage: r.usage, mode: r.mode };
+  } catch (e) {
+    return { error: String(e.message || e) };
+  }
+});
 
 // Warm the CLAP model in the background shortly after launch (no-op if venv absent).
 app.whenReady().then(() => {

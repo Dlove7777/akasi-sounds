@@ -315,6 +315,27 @@ const ok = (label, cond, extra = '') => {
     ok('Spectrogram DSP', false, e.message);
   }
 
+  // 2f. Music Director tool loop (mock LLM — no network). Proves the loop can only
+  // ever surface REAL library rows, tallies usage, and both architectures work.
+  const { runDirector } = require('../src/director');
+  let gturn = 0;
+  const groundedChat = async () => {
+    gturn++;
+    if (gturn === 1) return { message: { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'search_sounds', arguments: JSON.stringify({ query: 'weather', limit: 5 }) } }] }, usage: { prompt_tokens: 10, completion_tokens: 5 } };
+    return { message: { role: 'assistant', content: '**top pick** from the results' }, usage: { prompt_tokens: 8, completion_tokens: 4 } };
+  };
+  const gres = await runDirector({ db, sidecar, clapReady: false, messages: [{ role: 'user', content: 'weather sounds' }], chat: groundedChat });
+  ok('director (grounded): pool holds only REAL library rows', gres.pool.length > 0 && gres.pool.every((r) => db.getSound(r.id) != null));
+  ok('director (grounded): returns a final cue sheet in 2 steps', /top pick/.test(gres.text) && gres.steps === 2);
+  ok('director (grounded): tallies usage tokens across steps', gres.usage.prompt_tokens === 18 && gres.usage.completion_tokens === 9);
+  ok('director (grounded): pool rows carry no embedding blob', gres.pool.every((r) => r.embedding === undefined));
+
+  const retrieverChat = async () => ({ message: { content: 'weather' }, usage: { prompt_tokens: 3, completion_tokens: 2 } });
+  const judgeChat = async () => ({ message: { content: '**judged pick** from the pool' }, usage: { prompt_tokens: 6, completion_tokens: 3 } });
+  const tres = await runDirector({ db, sidecar, clapReady: false, mode: 'triad', messages: [{ role: 'user', content: 'weather' }], chat: judgeChat, retrieverChat });
+  ok('director (triad): judge picks from a real merged pool', tres.mode === 'triad' && tres.pool.length > 0 && tres.pool.every((r) => db.getSound(r.id) != null));
+  ok('director (triad): returns judged cue sheet in 3 steps', /judged pick/.test(tres.text) && tres.steps === 3);
+
   db.close();
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log(`\n${pass} passed, ${fail} failed`);

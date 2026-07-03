@@ -127,7 +127,18 @@ if (!window.akasi) {
     similarByFile: async (_p, limit) => ({ results: demo.filter((d) => d.kind === 'music').slice(0, limit || 40).map((d, i) => ({ ...d, _sim: +(0.9 - i * 0.01).toFixed(3), _sem: 1 })) }),
     startDragMany: () => {},
     exportCredits: async () => ({ path: '/mock/audio-credits.md', count: 4, flagged: 1, excluded: false }),
-    aiStatus: async () => ({ installed: true, ready: true }),
+    aiStatus: async () => ({ installed: true, ready: true, director: true }),
+    directorChat: async (messages) => {
+      const brief = [...messages].reverse().find((m) => m.role === 'user')?.content || '';
+      const picks = filt(brief, { kind: 'music', limit: 5 });
+      window.dispatchEvent(new CustomEvent('mock:director', { detail: { type: 'pool', rows: picks } }));
+      return {
+        text: `Here are ${picks.length} picks for “${brief}”:\n\n` +
+          picks.map((p) => `**${p.name}** — fits the brief. \`${p.bpm || '—'} BPM · ${p.key || '—'} · ${p.genre || '—'}\``).join('\n'),
+        pool: picks, steps: 2, mode: 'grounded',
+      };
+    },
+    onDirectorEvent: (cb) => window.addEventListener('mock:director', (e) => cb(e.detail)),
     analyzeLibrary: async () => ({ done: 42, total: 42 }),
     genres: async () => GENRES,
     onAnalyzeProgress: () => {},

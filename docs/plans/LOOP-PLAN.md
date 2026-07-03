@@ -52,7 +52,7 @@ Shortlist: `google/gemini-3-flash-preview` (default), `z-ai/glm-5.2` (verified l
 - Spawn a background research subagent (Sonnet): scan OpenRouter's model list + release notes for models launched in the **last ~2 weeks** — new **Gemini Flash**, new **Zai/GLM**, plus any others strong at cheap tool-calling. For each: exact OpenRouter model id, context, $/Mtok in+out, tool-calling support, notes.
 - Write `docs/plans/OPENROUTER-MODEL-CANDIDATES.md` (table + a shortlist of ~5 to bake off). Commit (doc-only).
 
-### [ ] 5. In-app Music Director chat — grounded-director (ships)
+### [x] 5. In-app Music Director chat — grounded-director (ships) — DONE
 - `src/director.js` (NEW, in-process): `async function runDirector({db, sidecar, clapReady, messages, model, mode:'grounded', onEvent})`.
   - Tools → LLM: `search_sounds({query,kind,bpmMin,bpmMax,durMin,durMax,instrumental,genre,limit})`, `get_sound({id})`, `library_stats()`. Dispatch `search_sounds` via `blendedSearch(db,sidecar,query,opts,clapReady)`.
   - Accumulate every surfaced row into a `pool` (Map id→row). Emit `onEvent({type:'tool',...})` and `onEvent({type:'pool', rows})` so the panel shows live candidates. Final assistant message = cue sheet; emit `onEvent({type:'final', text, pickIds})`.
@@ -63,8 +63,8 @@ Shortlist: `google/gemini-3-flash-preview` (default), `z-ai/glm-5.2` (verified l
 - `renderer/components/DirectorPanel.jsx` (NEW): right slide-out — chat log, input, and **live rows** (reuse SoundRow / a compact row) that audition + native-drag (`window.akasi.startDrag`). Toggle from a header button in App.jsx.
 - Test: smoke — `runDirector` with a **mock LLM** (inject a fake `chat` that emits one `search_sounds` call then a final) proves the tool dispatch returns real rows + no fabricated ids.
 
-### [ ] 6. 3-agent variant + bake-off harness (A/B)
-- `src/director.js`: add `mode:'triad'` — (1) two retriever calls (cheap models): *keyword-librarian* (literal terms) + *mood-supervisor* (semantic feeling) each emit ONE query → `blendedSearch` → merge pool; (2) *judge* (capable model) sees ONLY the merged real candidates → picks + cue sheet. Judge can't hallucinate (picks from real pool).
+### [ ] 6. Bake-off harness (A/B)  — NOTE: `mode:'triad'` ALREADY BUILT + tested in iter 5's src/director.js
+- ~~`src/director.js`: add `mode:'triad'`~~ DONE in iter 5 (keyword-librarian + mood-supervisor retrievers → judge). This iteration = just the harness + smoke.
 - `scripts/director-bakeoff.js` (runs under ELECTRON_RUN_AS_NODE vs real app DB, read-only): for each (brief × model × mode) record steps, `usage` tokens→cost, latency, and **honesty** = every path/id in the final answer exists in DB. ~6 briefs. Emit `docs/plans/DIRECTOR-BAKEOFF-RESULTS.md` ranked on honesty > tool-discipline > cost (NOT reasoning depth).
 - Test: smoke — triad mode with mock retriever+judge returns picks strictly ⊆ real pool.
 
@@ -74,4 +74,4 @@ Shortlist: `google/gemini-3-flash-preview` (default), `z-ai/glm-5.2` (verified l
 - **STOP the loop.** Do NOT build: generative Music Director (ACE-Step on VIDI), RAG knowledge-grounding, or a deeper agent swarm. Final message: summarize what shipped and recommend Dennis run **`/ce-plan`** with fresh context for that heavy phase (per handoff planning guidance).
 
 ---
-**Last iteration:** #3 Tag chips + reclassify — test:core 73/73, renderer build clean. `MetaEditor` rewritten: removable tag chips + additive input (Enter/comma/backspace, dedupe, cleaned), kind toggle reclassify, artist/genre/bpm. `updateMeta` unchanged (already whitelisted). Next: #4 research OpenRouter models (bg subagent).
+**Last iteration:** #5 Music Director chat — test:core 79/79, renderer build clean. `src/director.js` in-process tool loop (reuses blendedSearch), BOTH `grounded` + `triad` modes built & mock-tested. `director:chat` IPC streams live pool/tool events; `DirectorPanel.jsx` right slide-out with mode toggle + live draggable/auditionable candidate rows (picks highlighted). Default `google/gemini-3-flash-preview`. Next: #6 bake-off HARNESS only (triad already done).

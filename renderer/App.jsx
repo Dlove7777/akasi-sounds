@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar.jsx';
 import ResultsList from './components/ResultsList.jsx';
 import Waveform from './components/Waveform.jsx';
 import CheatSheet from './components/CheatSheet.jsx';
+import DirectorPanel from './components/DirectorPanel.jsx';
 import thesaurus from './lib/thesaurus.js';
 
 const RECENT_KEY = 'akasi.recent';
@@ -44,6 +45,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState(Math.min(tabState.active, tabState.tabs.length - 1));
   const [aiReady, setAiReady] = useState(false);
   const [aiInstalled, setAiInstalled] = useState(false);
+  const [directorOpen, setDirectorOpen] = useState(false);
+  const [directorAvailable, setDirectorAvailable] = useState(false);
   const [genreList, setGenreList] = useState([]);
   const [filters, setFilters] = useState({ dur: null, bpm: null, genre: null, vocals: null });
   const [autoAnalyze, setAutoAnalyze] = useState(() => localStorage.getItem('akasi.autoAnalyze') !== '0');
@@ -198,7 +201,7 @@ export default function App() {
     })();
     window.akasi.onDragError?.((msg) => setBusy(`Drag failed: ${msg}`));
     // AI availability + live analyze progress
-    window.akasi.aiStatus?.().then((s) => { setAiInstalled(!!s?.installed); setAiReady(!!s?.ready); });
+    window.akasi.aiStatus?.().then((s) => { setAiInstalled(!!s?.installed); setAiReady(!!s?.ready); setDirectorAvailable(!!s?.director); });
     window.akasi.onAiReady?.(() => { setAiReady(true); setBusy('AI search ready'); setTimeout(() => setBusy(null), 1500); });
     window.akasi.onAnalyzeProgress?.((p) => setBusy(`Analyzing ${p.done}/${p.total}${p.current ? ` · ${p.current.slice(0, 28)}` : ''}`));
     window.akasi.genres?.().then((g) => setGenreList(g || []));
@@ -494,6 +497,9 @@ export default function App() {
             <button className="credits-btn" title="Match a sample — pick or drag in any audio file to find similar-sounding library files (AI)"
               onClick={matchSample}>⇪ Match sample</button>
           )}
+          <button className={`credits-btn director-btn ${directorOpen ? 'on' : ''}`}
+            title="Music Director — chat to curate a cue sheet from your library (OpenRouter)"
+            onClick={() => setDirectorOpen((v) => !v)}>🎬 Director</button>
           {creditsScope && results.length > 0 && (
             <button
               className="credits-btn"
@@ -630,6 +636,13 @@ export default function App() {
                     onOpenSheet={() => setSheetOpen(true)} />
         </div>
       </main>
+
+      <DirectorPanel
+        open={directorOpen}
+        onClose={() => setDirectorOpen(false)}
+        onAudition={cue}
+        available={directorAvailable}
+      />
 
       <CheatSheet open={sheetOpen} onClose={() => setSheetOpen(false)} />
     </div>

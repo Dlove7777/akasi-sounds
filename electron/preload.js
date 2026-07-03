@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('akasi', {
 
   // AI
   aiStatus: () => ipcRenderer.invoke('ai:status'),
+  directorChat: (messages, opts) => ipcRenderer.invoke('director:chat', { messages, opts }),
+  onDirectorEvent: (cb) => ipcRenderer.on('director:event', (_e, d) => cb(d)),
   analyzeLibrary: () => ipcRenderer.invoke('analyze:run'),
   genres: () => ipcRenderer.invoke('lib:genres'),
   onAnalyzeProgress: (cb) => ipcRenderer.on('analyze:progress', (_e, d) => cb(d)),
