@@ -87,9 +87,22 @@ async function main() {
   if (!fs.existsSync(dbPath)) { console.error(`DB not found at ${dbPath} — launch the app once.`); process.exit(1); }
   const db = openDb(dbPath);
 
-  // Keyword search only — CLAP warm-up deadlocks under ELECTRON_RUN_AS_NODE and the
-  // semantic layer doesn't change the axes we rank (honesty / tool-discipline / cost).
-  const clapReady = false;
+  // Warm CLAP (bounded) so semantic search is ON for eval — triad's retrievers emit
+  // semantic queries, so a keyword-only harness scores them 0 (an artifact, not a
+  // verdict). Verified via scripts/clap-warmup-repro.js: startClap resolves ~5s under
+  // ELECTRON_RUN_AS_NODE; the old "deadlock" was a transient (leaked sidecar procs /
+  // mid-download). Falls back to keyword-only if warm-up stalls, so eval never hangs.
+  // Pass --keyword to force keyword-only.
+  let clapReady = false;
+  if (!process.argv.includes('--keyword') && sidecar.available()) {
+    try {
+      await Promise.race([
+        sidecar.startClap().then(() => { clapReady = true; }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('warm timeout')), 60000)),
+      ]);
+    } catch (e) { process.stderr.write(`CLAP warm failed (${e.message}) — keyword-only\n`); }
+    process.stderr.write(clapReady ? 'CLAP warm — semantic eval ON\n' : 'CLAP unavailable — keyword-only\n');
+  }
 
   const quick = process.argv.includes('--quick');
   const briefs = quick ? BRIEFS.slice(0, 2) : BRIEFS;
