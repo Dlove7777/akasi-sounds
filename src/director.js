@@ -37,11 +37,11 @@ FIRST, classify the brief:
 
 TWO SOURCES:
 - search_sounds = Dennis's OWN library. ALWAYS try this first — his files are highest quality and license-clean.
-- search_freesound = millions of Creative-Commons sounds ONLINE. Reach for it when his library lacks a good fit (his library is SFX-heavy, so music beds especially may need it). Freesound shines for SFX, textures, ambiences and loops; it's thinner on polished music beds. Its results are CC-licensed — flag CC-BY (needs credit) and NEVER present CC-BY-NC as client-safe. When both have a fit of equal quality, prefer his local file.
+- search_online = Creative-Commons libraries online, all at once: Freesound (SFX, textures, ambiences, loops) and Jamendo (full CC MUSIC tracks — real beds/underscore). Reach for it when his library lacks a good fit — his library is SFX-heavy, so for MUSIC beds especially, search_online (Jamendo) is where you'll find them. Results are CC-licensed — flag CC-BY (needs credit) and NEVER present CC-BY-NC as client-safe. When local and online are equal quality, prefer his local file.
 
 How to work:
 - Run 2-3 DIVERSE searches, not one. Vary the angle: a mood/feeling query ("dark brooding tension"), a genre/instrumentation query ("ambient synth pad", "minimal piano"), and a literal one. Semantic AI search matches the *feeling* — describe it, don't just keyword.
-- If the local library comes up thin or off-target, DON'T give up — try search_freesound before concluding there's no fit.
+- If the local library comes up thin or off-target, DON'T give up — try search_online before concluding there's no fit (for a music bed, that means Jamendo).
 - Apply the filters the brief states: tempo words → bpmMin/bpmMax (chill <90, mid 90-120, driving 120+); "short sting" → durMax; "full bed" → durMin (a bed is usually >20s, not a 1-second file).
 - If a filtered search is thin, WIDEN (drop the bpm or duration filter) and search again before settling — don't grab a weak match just to fill the sheet. Use library_stats to see available genres.
 - Then STOP searching and write the cue sheet.
@@ -100,16 +100,16 @@ const TOOLS = [
 ];
 
 // Only offered when a remote provider is wired (main process passes remoteSearch).
-const FREESOUND_TOOL = {
+const ONLINE_TOOL = {
   type: 'function',
   function: {
-    name: 'search_freesound',
+    name: 'search_online',
     description:
-      "Search Freesound.org — millions of Creative-Commons sounds ONLINE — when Dennis's own library lacks a good fit. Results become real, draggable rows (previews cache on drag). Freesound is strongest for SFX, textures, ambiences and loops; thinner on polished music beds. Flag licensing: CC-BY needs credit, CC-BY-NC is NOT client-safe.",
+      "Search ONLINE Creative-Commons libraries when Dennis's own library lacks a good fit. Spans every connected source at once: Freesound (SFX, textures, ambiences, loops) and Jamendo (full CC MUSIC tracks — the place to find real beds/underscore). Results become real, draggable rows (previews cache on drag). Flag licensing: CC-BY needs credit, CC-BY-NC is NOT client-safe.",
     parameters: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Keywords to search Freesound for.' },
+        query: { type: 'string', description: 'Keywords / mood / genre to search online for.' },
         limit: { type: 'number', description: 'Max results (default 20).' },
       },
       required: ['query'],
@@ -119,7 +119,7 @@ const FREESOUND_TOOL = {
 
 /** Tool set for a run — adds the online tool only when a provider is available. */
 function buildTools(hasRemote) {
-  return hasRemote ? [...TOOLS, FREESOUND_TOOL] : TOOLS;
+  return hasRemote ? [...TOOLS, ONLINE_TOOL] : TOOLS;
 }
 
 /** Compact row for the model — drops the embedding blob + noisy columns. */
@@ -167,13 +167,13 @@ async function dispatch(name, args, ctx) {
   if (name === 'library_stats') {
     return JSON.stringify({ ...db.stats(), genres: db.genres() });
   }
-  if (name === 'search_freesound') {
+  if (name === 'search_online') {
     if (!ctx.remoteSearch) return JSON.stringify({ error: 'Online search unavailable (no provider/API key).' });
     const r = await ctx.remoteSearch(String(args.query || ''), Math.min(args.limit || 20, 40));
     if (r.error) return JSON.stringify({ error: r.error, results: [] });
     for (const row of r.results || []) if (!pool.has(row.id)) pool.set(row.id, row);
     onEvent?.({ type: 'pool', rows: [...pool.values()] });
-    return JSON.stringify({ count: r.count ?? (r.results || []).length, source: 'freesound', results: (r.results || []).map(slim) });
+    return JSON.stringify({ count: r.count ?? (r.results || []).length, results: (r.results || []).map((x) => ({ ...slim(x), source: x.source })) });
   }
   return JSON.stringify({ error: `unknown tool ${name}` });
 }

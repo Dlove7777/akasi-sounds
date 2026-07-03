@@ -2,12 +2,16 @@
 /**
  * Provider registry. Each provider is a small module exposing:
  *   id, label, available(), search(query, opts) -> { count, results:[normalized] }
- * Adding Pixabay (site scrape), Internet Archive, or a dataset importer later means
- * dropping a file here — the UI and index don't change.
+ * Adding Internet Archive, a dataset importer, etc. later means dropping a file
+ * here — the UI and index don't change.
  */
 const freesound = require('./freesound');
+const jamendo = require('./jamendo');
+const pixabay = require('./pixabay');
 
-const PROVIDERS = [freesound];
+// Order = search order. Freesound (SFX) + Jamendo (music) are the live pair; Pixabay
+// is an inert stub (Cloudflare-gated) that stays hidden until a headless path is added.
+const PROVIDERS = [freesound, jamendo, pixabay];
 
 function all() {
   return PROVIDERS;

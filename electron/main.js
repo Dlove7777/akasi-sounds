@@ -163,14 +163,24 @@ ipcMain.handle('director:chat', async (_e, { messages, opts }) => {
       model: opts?.model || undefined,
       retrieverModel: opts?.retrieverModel || undefined,
       apiKey,
-      // Give the Director the online library too — folds Freesound hits into the
-      // index so its picks become real, draggable rows (previews cache on drag).
+      // Give the Director every connected online library — folds hits from all
+      // available providers (Freesound SFX + Jamendo music) into the index so its
+      // picks become real, draggable rows (previews cache on drag).
       remoteSearch: async (query, limit) => {
-        const p = providers.get('freesound');
-        if (!p || !p.available()) return { error: 'Freesound unavailable (no API key).', results: [] };
-        const res = await p.search(query, { page: 1, pageSize: Math.min(limit || 20, 40) });
-        db.upsertMany(res.results || []);
-        return { count: res.count, results: db.search(query, { source: 'freesound', limit: limit || 20 }) };
+        const avail = providers.availableProviders();
+        if (!avail.length) return { error: 'No online libraries connected (set a provider API key).', results: [] };
+        const merged = [];
+        const per = Math.max(6, Math.floor((limit || 24) / avail.length));
+        for (const { id } of avail) {
+          try {
+            const res = await providers.get(id).search(query, { page: 1, pageSize: Math.min(per, 30) });
+            for (const rid of db.upsertMany(res.results || [])) {
+              const row = db.getSound(rid);
+              if (row) merged.push(row);
+            }
+          } catch { /* one provider failing shouldn't sink the rest */ }
+        }
+        return { count: merged.length, results: merged.slice(0, limit || 24) };
       },
       onEvent: (evt) => win?.webContents.send('director:event', evt),
     });
