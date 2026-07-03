@@ -393,6 +393,17 @@ const ok = (label, cond, extra = '') => {
   ok('director: write_generation_prompt tool runs without a live generator', /generation prompt/.test(wgpRes.text) && wgpRes.steps === 2);
   ok('director: write_generation_prompt is offered in the base toolset', buildTools(false).some((t) => t.function.name === 'write_generation_prompt'));
 
+  // 2f6. Reference-exemplar matching (match_reference tool → CLAP similarity over real rows).
+  ok('director: match_reference offered in the base toolset', buildTools(false).some((t) => t.function.name === 'match_reference'));
+  let mrTurn = 0;
+  const mrChat = async () => {
+    mrTurn++;
+    if (mrTurn === 1) return { message: { role: 'assistant', content: null, tool_calls: [{ id: 'm1', type: 'function', function: { name: 'match_reference', arguments: JSON.stringify({ anchorId: nId }) } }] }, usage: { prompt_tokens: 4, completion_tokens: 2 } };
+    return { message: { role: 'assistant', content: 'Closest-sounding files from your library.' }, usage: { prompt_tokens: 3, completion_tokens: 2 } };
+  };
+  const mrRes = await runDirector({ db, sidecar, clapReady: false, messages: [{ role: 'user', content: 'find something that sounds like Sim Near' }], chat: mrChat });
+  ok('director: match_reference(anchorId) pools only REAL library rows by sound', mrRes.pool.length > 0 && mrRes.pool.every((r) => db.getSound(r.id) != null) && !mrRes.pool.some((r) => r.id === nId));
+
   // 2g. Bake-off honesty checker — the guard against fabricated filenames.
   const { honestyReport } = require('./director-bakeoff');
   const hp = [{ name: 'Thunder Clap.wav' }, { name: 'Rain Light.wav' }];

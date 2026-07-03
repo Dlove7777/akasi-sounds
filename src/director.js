@@ -19,7 +19,7 @@
  * Model-agnostic: pass `chat` to inject any OpenAI-compatible caller (tests inject a
  * mock; prod uses the built-in OpenRouter fetch).
  */
-const { blendedSearch } = require('./search');
+const { blendedSearch, similarByEmbedding } = require('./search');
 const { SCORING_PLAYBOOK } = require('./playbook');
 const genprompt = require('./genprompt');
 
@@ -44,6 +44,7 @@ TWO SOURCES:
 How to work:
 - Run 2-3 DIVERSE searches, not one. Vary the angle: a mood/feeling query ("dark brooding tension"), a genre/instrumentation query ("ambient synth pad", "minimal piano"), and a literal one. Semantic AI search matches the *feeling* — describe it, don't just keyword.
 - If the local library comes up thin or off-target, DON'T give up — try search_online before concluding there's no fit (for a music bed, that means Jamendo).
+- SOUNDS-LIKE: for "sounds like <artist/track/vibe>" requests, call match_reference (an anchorId of a library file, or a text style description). It matches by SOUND (CLAP), returning real files — you write the style words, it finds the sonic match.
 - Apply the filters the brief states: tempo words → bpmMin/bpmMax (chill <90, mid 90-120, driving 120+); "short sting" → durMax; "full bed" → durMin (a bed is usually >20s, not a 1-second file).
 - If a filtered search is thin, WIDEN (drop the bpm or duration filter) and search again before settling — don't grab a weak match just to fill the sheet. Use library_stats to see available genres.
 - Then STOP searching and write the cue sheet.
@@ -103,6 +104,22 @@ const TOOLS = [
       name: 'library_stats',
       description: 'Totals + available genres, to orient before searching.',
       parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'match_reference',
+      description:
+        "Find library files that SOUND LIKE a reference (CLAP audio-similarity) — use for \"sounds like X\" requests. Pass anchorId (a library sound id to match against) OR description (a text style description, e.g. \"lo-fi Nujabes-style jazzy beat\"). Returns real library rows; you supply the style words, CLAP supplies the sonic match.",
+      parameters: {
+        type: 'object',
+        properties: {
+          description: { type: 'string', description: 'Textual style description to match by sound.' },
+          anchorId: { type: 'number', description: 'A library sound id to find similar-sounding files to.' },
+          limit: { type: 'number' },
+        },
+      },
     },
   },
   {
@@ -190,6 +207,22 @@ async function dispatch(name, args, ctx) {
   }
   if (name === 'library_stats') {
     return JSON.stringify({ ...db.stats(), genres: db.genres() });
+  }
+  if (name === 'match_reference') {
+    let targetArr = null;
+    if (args.anchorId != null) {
+      targetArr = db.getEmbeddingArray(args.anchorId);
+    } else if (args.description && ctx.clapReady) {
+      const r = await sidecar.embedText(String(args.description)).catch(() => null);
+      if (r?.embedding) targetArr = r.embedding;
+    }
+    if (!targetArr) {
+      return JSON.stringify({ error: args.anchorId != null ? 'That anchor has no AI fingerprint yet (run Analyze).' : 'Semantic match needs the AI model warm — use search_sounds instead.', results: [] });
+    }
+    const rows = similarByEmbedding(db, sidecar, targetArr, { limit: Math.min(args.limit || 20, 40), excludeId: args.anchorId });
+    for (const row of rows) if (!pool.has(row.id)) pool.set(row.id, row);
+    onEvent?.({ type: 'pool', rows: [...pool.values()] });
+    return JSON.stringify({ count: rows.length, results: rows.map((x) => ({ ...slim(x), sim: x._sim })) });
   }
   if (name === 'write_generation_prompt') {
     let sample = null;
