@@ -22,6 +22,7 @@ const { buildManifest } = require('../src/credits');
 const sidecar = require('../src/sidecar');
 const { blendedSearch, similarByEmbedding } = require('../src/search');
 const { runDirector } = require('../src/director');
+const generateProvider = require('../src/providers/generate');
 const providers = require('../src/providers');
 const freesound = require('../src/providers/freesound');
 const { scanFolder } = require('../src/indexer');
@@ -147,6 +148,44 @@ ipcMain.handle('col:forSound', (_e, soundId) => db.collectionsForSound(soundId))
 ipcMain.handle('ai:status', () => ({ installed: sidecar.available(), ready: clapReady, director: !!process.env.OPENROUTER_API_KEY }));
 ipcMain.handle('lib:genres', () => db.genres());
 
+/* ----------------------------- IPC: generation ------------------------- */
+
+// Generate a track on VIDI (ACE-Step), save it, index it as a source='generate'
+// row, and analyze it so it's immediately auditionable, draggable, find-similar-able.
+// Deliberately NOT part of the search_online fan-out (KTD4) — explicit only.
+const genDir = () => path.join(dataDir(), 'generated');
+
+async function runGeneration(spec, onStatus) {
+  const r = await generateProvider.generate(spec, { onStatus });
+  const id = await generateProvider.materialize(
+    db, { bytes: r.bytes, ext: r.ext, caption: spec.caption, durationSec: spec.durationSec, seed: spec.seed }, genDir()
+  );
+  try {
+    const file = db.getSound(id).path;
+    const dsp = await sidecar.analyzeBatch([file]).catch(() => new Map());
+    const d = dsp.get(file) || {};
+    let ai = {};
+    const c = await sidecar.classify(file).catch(() => null);
+    if (c && !c.error) {
+      ai = { vocals: c.vocals ?? null, ai_genre: c.genre ?? null, embedding: c.embedding ? Buffer.from(new Float32Array(c.embedding).buffer) : null };
+    }
+    db.setAnalysis(id, { bpm: d.bpm ?? null, key: d.key ?? null, ...ai });
+  } catch { /* generation is valid even if analysis fails */ }
+  return db.getSound(id);
+}
+
+ipcMain.handle('generate:status', () => ({ available: generateProvider.available(), url: generateProvider.baseUrl() || null }));
+ipcMain.handle('generate:run', async (_e, spec) => {
+  if (!generateProvider.available()) return { error: 'Generation unavailable — set VIDI_ACESTEP_URL in ~/.secrets.env.' };
+  try {
+    const row = await runGeneration(spec || {}, (s) => win?.webContents.send('generate:progress', { status: s }));
+    const { embedding, ...clean } = row;
+    return { row: clean };
+  } catch (e) {
+    return { error: String(e.message || e) };
+  }
+});
+
 /* --------------------------- IPC: Music Director ----------------------- */
 
 // In-app Music Director chat. OpenRouter brain drives a tool loop over the REAL
@@ -171,6 +210,10 @@ ipcMain.handle('director:chat', async (_e, { messages, opts }) => {
         const d = dsp.get(p) || {};
         return c && !c.error ? { genre: c.genre, vocals: c.vocals ?? null, bpm: d.bpm ?? null, key: d.key ?? null } : null;
       },
+      // Let the director actually generate (ACE-Step on VIDI) when connected.
+      generate: generateProvider.available()
+        ? (spec, onStatus) => runGeneration(spec, onStatus)
+        : undefined,
       // Give the Director every connected online library — folds hits from all
       // available providers (Freesound SFX + Jamendo music) into the index so its
       // picks become real, draggable rows (previews cache on drag).

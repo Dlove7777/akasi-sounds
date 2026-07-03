@@ -158,9 +158,27 @@ const ONLINE_TOOL = {
   },
 };
 
-/** Tool set for a run — adds the online tool only when a provider is available. */
-function buildTools(hasRemote) {
-  return hasRemote ? [...TOOLS, ONLINE_TOOL] : TOOLS;
+// Only offered when generation is connected (VIDI ACE-Step reachable).
+const GENERATE_TOOL = {
+  type: 'function',
+  function: {
+    name: 'generate_music',
+    description:
+      "Generate a NEW music track with ACE-Step (on VIDI) when the library AND online have no fit. Returns a real, draggable generated row added to the library. Provide a `brief` (I'll draft the caption) OR a finished `caption` (from write_generation_prompt), plus durationSec. Generation takes several seconds; only reach for it after search + search_online genuinely come up short.",
+    parameters: {
+      type: 'object',
+      properties: {
+        brief: { type: 'string', description: 'What to generate (a caption is drafted from it).' },
+        caption: { type: 'string', description: 'A finished generation caption; overrides brief.' },
+        durationSec: { type: 'number', description: 'Target length in seconds (default 30).' },
+      },
+    },
+  },
+};
+
+/** Tool set for a run — adds conditional tools only when their capability is wired. */
+function buildTools(hasRemote, hasGenerate) {
+  return [...TOOLS, ...(hasRemote ? [ONLINE_TOOL] : []), ...(hasGenerate ? [GENERATE_TOOL] : [])];
 }
 
 /** Compact row for the model — drops the embedding blob + noisy columns. */
@@ -231,6 +249,17 @@ async function dispatch(name, args, ctx) {
     }
     return JSON.stringify({ generationPrompt: genprompt.buildGenerationPrompt({ brief: args.brief, sample }) });
   }
+  if (name === 'generate_music') {
+    if (!ctx.generate) return JSON.stringify({ error: 'Generation not connected (VIDI ACE-Step offline).' });
+    const gp = args.caption ? null : genprompt.buildGenerationPrompt({ brief: args.brief || '' });
+    const spec = { caption: args.caption || gp.caption, durationSec: args.durationSec || (gp && gp.suggestedDurationSec) || 30 };
+    onEvent?.({ type: 'generating', spec });
+    let row;
+    try { row = await ctx.generate(spec, (s) => onEvent?.({ type: 'generating', status: s })); }
+    catch (e) { return JSON.stringify({ error: String(e.message || e) }); }
+    if (row) { pool.set(row.id, row); onEvent?.({ type: 'pool', rows: [...pool.values()] }); }
+    return JSON.stringify({ generated: row ? slim(row) : null });
+  }
   if (name === 'search_online') {
     if (!ctx.remoteSearch) return JSON.stringify({ error: 'Online search unavailable (no provider/API key).' });
     const r = await ctx.remoteSearch(String(args.query || ''), Math.min(args.limit || 20, 40));
@@ -295,8 +324,8 @@ async function runDirector(p) {
   } = p;
   const chat = p.chat || makeOpenRouterChat({ apiKey, model });
   const pool = new Map();
-  const ctx = { db, sidecar, clapReady, pool, onEvent, remoteSearch: p.remoteSearch };
-  const tools = buildTools(!!p.remoteSearch);
+  const ctx = { db, sidecar, clapReady, pool, onEvent, remoteSearch: p.remoteSearch, analyzeSample: p.analyzeSample, generate: p.generate };
+  const tools = buildTools(!!p.remoteSearch, !!p.generate);
   let usageTotal = { prompt_tokens: 0, completion_tokens: 0 };
   const addUsage = (u) => { if (u) { usageTotal.prompt_tokens += u.prompt_tokens || 0; usageTotal.completion_tokens += u.completion_tokens || 0; } };
   const brief = [...messages].reverse().find((m) => m.role === 'user')?.content || '';

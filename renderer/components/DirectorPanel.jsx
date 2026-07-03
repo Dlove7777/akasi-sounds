@@ -41,6 +41,7 @@ export default function DirectorPanel({ open, onClose, onAudition, available }) 
     if (!window.akasi.onDirectorEvent) return;
     window.akasi.onDirectorEvent((evt) => {
       if (evt.type === 'pool') setPool(evt.rows || []);
+      else if (evt.type === 'generating') setActivity(evt.status ? `generating… ${evt.status}` : `generating "${String(evt.spec?.caption || '').slice(0, 40)}"…`);
       else if (evt.type === 'tool') setActivity(`${evt.name}(${evt.args?.query ? `"${String(evt.args.query).slice(0, 40)}"` : ''})`);
     });
   }, []);

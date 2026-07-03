@@ -404,6 +404,31 @@ const ok = (label, cond, extra = '') => {
   const mrRes = await runDirector({ db, sidecar, clapReady: false, messages: [{ role: 'user', content: 'find something that sounds like Sim Near' }], chat: mrChat });
   ok('director: match_reference(anchorId) pools only REAL library rows by sound', mrRes.pool.length > 0 && mrRes.pool.every((r) => db.getSound(r.id) != null) && !mrRes.pool.some((r) => r.id === nId));
 
+  // 2f7. Generation: materialize a generated result into a real library row (U7).
+  const generateProvider = require('../src/providers/generate');
+  const genSaveDir = fs.mkdtempSync(path.join(os.tmpdir(), 'akasi-gen-'));
+  const genId = await generateProvider.materialize(
+    db, { bytes: Buffer.from('RIFF....WAVEmockpcmdata'), ext: 'wav', caption: 'dark ambient tension bed', durationSec: 30 }, genSaveDir
+  );
+  const genRow = db.getSound(genId);
+  ok('generate.materialize → source=generate music row, MIT license, file on disk',
+    genRow.source === 'generate' && genRow.kind === 'music' && genRow.license === 'ACE-Step 1.5 / MIT' && fs.existsSync(genRow.path));
+  ok('generate row classifies as "generated" (client-safe)', classifyLicense(genRow.license) === 'generated');
+  ok('generate provider is NOT registered in search_online (no GPU fan-out)', !require('../src/providers').all().some((p) => p.id === 'generate'));
+
+  // 2f8. Director generate_music tool (U8) — mock generator returns a real row.
+  ok('director: generate_music offered only when generation is wired',
+    buildTools(false, true).some((t) => t.function.name === 'generate_music') && !buildTools(false, false).some((t) => t.function.name === 'generate_music'));
+  let gmTurn = 0;
+  const gmChat = async () => {
+    gmTurn++;
+    if (gmTurn === 1) return { message: { role: 'assistant', content: null, tool_calls: [{ id: 'g1', type: 'function', function: { name: 'generate_music', arguments: JSON.stringify({ brief: 'dark ambient bed', durationSec: 30 }) } }] }, usage: { prompt_tokens: 4, completion_tokens: 2 } };
+    return { message: { role: 'assistant', content: 'Generated a bed and added it to your library.' }, usage: { prompt_tokens: 3, completion_tokens: 2 } };
+  };
+  const gmRes = await runDirector({ db, sidecar, clapReady: false, messages: [{ role: 'user', content: 'nothing fits, generate one' }], chat: gmChat, generate: async () => db.getSound(genId) });
+  ok('director: generated track lands in the pool as a real row (honesty preserved)',
+    gmRes.pool.some((r) => r.id === genId && r.source === 'generate') && gmRes.pool.every((r) => db.getSound(r.id) != null));
+
   // 2g. Bake-off honesty checker — the guard against fabricated filenames.
   const { honestyReport } = require('./director-bakeoff');
   const hp = [{ name: 'Thunder Clap.wav' }, { name: 'Rain Light.wav' }];

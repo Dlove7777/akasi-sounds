@@ -139,6 +139,9 @@ if (!window.akasi) {
       };
     },
     onDirectorEvent: (cb) => window.addEventListener('mock:director', (e) => cb(e.detail)),
+    generateStatus: async () => ({ available: false, url: null }),
+    generateMusic: async () => ({ error: 'Generation unavailable in mock mode.' }),
+    onGenerateProgress: () => {},
     analyzeLibrary: async () => ({ done: 42, total: 42 }),
     genres: async () => GENRES,
     onAnalyzeProgress: () => {},
