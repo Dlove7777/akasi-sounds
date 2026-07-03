@@ -143,17 +143,47 @@ export default function App() {
   // the normal result set). Entering similar mode changes none of these, so it sticks.
   useEffect(() => { setSimilarOf(null); }, [scope, activeCollectionId, query, sort, filters]);
 
+  const enterSimilar = useCallback((seed, rows) => {
+    setSimilarOf(seed);
+    setResults(rows || []);
+    setSelectedId(null);
+    setChecked(new Set());
+  }, []);
+
   const findSimilar = useCallback(async (s) => {
     if (!window.akasi.findSimilar) return;
     setBusy(`Finding sounds like ${s.name}…`);
     const r = await window.akasi.findSimilar(s.id, 60);
     if (r?.error) { setBusy(r.error); setTimeout(() => setBusy(null), 2600); return; }
-    setSimilarOf(s);
-    setResults(r.results || []);
-    setSelectedId(null);
-    setChecked(new Set());
+    enterSimilar(s, r.results);
     setBusy(null);
-  }, []);
+  }, [enterSimilar]);
+
+  // Match any external audio file (picker or OS drag-in) against the library by sound.
+  const matchSampleByPath = useCallback(async (path) => {
+    if (!window.akasi.similarByFile || !path) return;
+    const base = String(path).split(/[\\/]/).pop();
+    setBusy(`Analyzing ${base}…`);
+    const r = await window.akasi.similarByFile(path, 60);
+    if (r?.error) { setBusy(r.error); setTimeout(() => setBusy(null), 3000); return; }
+    enterSimilar({ id: `file:${path}`, name: base, _file: true }, r.results);
+    setBusy(null);
+  }, [enterSimilar]);
+
+  const matchSample = useCallback(async () => {
+    if (!window.akasi.pickSampleFile) return;
+    const picked = await window.akasi.pickSampleFile();
+    if (!picked || picked.canceled || !picked.path) return;
+    matchSampleByPath(picked.path);
+  }, [matchSampleByPath]);
+
+  // OS drag-in of an external audio file → match-by-sound.
+  const onSampleDrop = useCallback((e) => {
+    const f = e.dataTransfer?.files?.[0];
+    if (!f || !f.path) return;
+    e.preventDefault();
+    if (/\.(wav|mp3|aiff?|flac|m4a|ogg|opus|wma)$/i.test(f.path)) matchSampleByPath(f.path);
+  }, [matchSampleByPath]);
 
   const loadMeta = useCallback(async () => {
     setStats(await window.akasi.stats());
@@ -415,7 +445,9 @@ export default function App() {
         isMock={isMock}
       />
 
-      <main className="main">
+      <main className="main"
+        onDragOver={(e) => { if (e.dataTransfer?.types?.includes('Files')) e.preventDefault(); }}
+        onDrop={onSampleDrop}>
         <div className="tabs">
           {tabs.map((t, i) => (
             <button key={t.id} className={`tab ${i === activeTab ? 'active' : ''}`} onClick={() => switchTab(i)}
@@ -457,6 +489,10 @@ export default function App() {
                 title={autoAnalyze ? 'Auto-analyze new folders on import — ON' : 'Auto-analyze new folders on import — OFF'}
                 onClick={() => setAutoAnalyze((v) => !v)}>auto</button>
             </span>
+          )}
+          {aiInstalled && !remoteMode && (
+            <button className="credits-btn" title="Match a sample — pick or drag in any audio file to find similar-sounding library files (AI)"
+              onClick={matchSample}>⇪ Match sample</button>
           )}
           {creditsScope && results.length > 0 && (
             <button

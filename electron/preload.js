@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('akasi', {
   setFavoriteMany: (ids, on) => ipcRenderer.invoke('lib:favMany', { ids, on }),
   addManyToCollection: (collectionId, ids) => ipcRenderer.invoke('col:addMany', { collectionId, ids }),
   findSimilar: (id, limit) => ipcRenderer.invoke('similar:byId', { id, limit }),
+  pickSampleFile: () => ipcRenderer.invoke('similar:pickFile'),
+  similarByFile: (path, limit) => ipcRenderer.invoke('similar:byFile', { path, limit }),
   startDragMany: (ids) => ipcRenderer.send('drag:startMany', ids),
   exportCredits: (opts) => ipcRenderer.invoke('credits:export', opts || {}),
 

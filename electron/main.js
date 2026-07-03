@@ -110,6 +110,27 @@ ipcMain.handle('similar:byId', (_e, { id, limit }) => {
   return { results: similarByEmbedding(db, sidecar, target, { limit: limit || 40, excludeId: id }) };
 });
 
+// Match Sample: embed ANY external audio file with CLAP, then cosine it against the
+// library — "find me sounds like this one". Needs the sidecar warm (embeds live).
+const AUDIO_EXTS = ['wav', 'mp3', 'aiff', 'aif', 'flac', 'm4a', 'ogg', 'opus', 'wma'];
+ipcMain.handle('similar:pickFile', async () => {
+  const r = await dialog.showOpenDialog(win, {
+    title: 'Pick an audio sample to match',
+    properties: ['openFile'],
+    filters: [{ name: 'Audio', extensions: AUDIO_EXTS }],
+  });
+  if (r.canceled || !r.filePaths[0]) return { canceled: true };
+  return { path: r.filePaths[0] };
+});
+ipcMain.handle('similar:byFile', async (_e, { path: p, limit }) => {
+  if (!p || !fs.existsSync(p)) return { error: 'File not found.', results: [] };
+  if (!sidecar.available()) return { error: 'AI sidecar not installed — run sidecar/setup.sh', results: [] };
+  let r;
+  try { r = await sidecar.embedAudio(p); } catch (e) { return { error: String(e.message || e), results: [] }; }
+  if (!r?.embedding) return { error: r?.error || 'Could not analyze that file.', results: [] };
+  return { results: similarByEmbedding(db, sidecar, r.embedding, { limit: limit || 40 }) };
+});
+
 /* -------------------------- IPC: collections -------------------------- */
 
 ipcMain.handle('col:list', () => db.listCollections());

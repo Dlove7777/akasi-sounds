@@ -36,7 +36,7 @@ No GNU `timeout` on macOS → `perl -e 'alarm N; exec @ARGV'`.
 - `renderer/App.jsx`: `similarOf` state; `onFindSimilar` runs `findSimilar`, `setResults`, sets a banner row above results ("≋ Similar to {name} · ✕ clear"); any scope/query change clears it.
 - Test: smoke — insert 3 rows w/ crafted embeddings, assert `similarByEmbedding` ranks the nearest first and excludes self.
 
-### [ ] 2. Upload sample → find similar
+### [x] 2. Upload sample → find similar — DONE
 - `electron/main.js`: `similar:pickFile` (dialog `openFile`, audio exts) + `similar:byFile` (`if(!sidecar.available()) return {error}`; `const r=await sidecar.embedAudio(path)`; `return {results: similarByEmbedding(db,sidecar,r.embedding,{limit:40})}`).
 - `preload.js`: `pickSampleFile`, `similarByFile(path)`.
 - `App.jsx`: searchbar button `⇪ Match sample` → pick → results + banner "≋ Similar to <basename>". Also accept an external-audio drop on the results area (nice-to-have).
@@ -73,4 +73,4 @@ No GNU `timeout` on macOS → `perl -e 'alarm N; exec @ARGV'`.
 - **STOP the loop.** Do NOT build: generative Music Director (ACE-Step on VIDI), RAG knowledge-grounding, or a deeper agent swarm. Final message: summarize what shipped and recommend Dennis run **`/ce-plan`** with fresh context for that heavy phase (per handoff planning guidance).
 
 ---
-**Last iteration:** #1 Find Similar (in-library) — test:core 70/70, renderer build clean. `≋` row action → cosine over stored CLAP blobs (no warm-up), banner + auto-clear on context change. Next: #2 upload sample → similar.
+**Last iteration:** #2 Match sample — test:core 71/71, renderer build clean. `⇪ Match sample` button + OS drag-in → `sidecar.embedAudio` → cosine vs library, reuses the Find-Similar banner (file seed). `similar:pickFile`/`similar:byFile` IPC. Next: #3 manual reclassify + custom-tag chips.

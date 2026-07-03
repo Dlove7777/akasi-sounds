@@ -123,6 +123,8 @@ if (!window.akasi) {
       pool.sort((a, b) => (b.genre === seed.genre) - (a.genre === seed.genre));
       return { results: pool.slice(0, limit || 40).map((d, i) => ({ ...d, _sim: +(0.95 - i * 0.01).toFixed(3), _sem: 1 })) };
     },
+    pickSampleFile: async () => ({ path: '/Users/you/Desktop/reference-track.wav' }),
+    similarByFile: async (_p, limit) => ({ results: demo.filter((d) => d.kind === 'music').slice(0, limit || 40).map((d, i) => ({ ...d, _sim: +(0.9 - i * 0.01).toFixed(3), _sem: 1 })) }),
     startDragMany: () => {},
     exportCredits: async () => ({ path: '/mock/audio-credits.md', count: 4, flagged: 1, excluded: false }),
     aiStatus: async () => ({ installed: true, ready: true }),

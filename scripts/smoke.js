@@ -171,6 +171,9 @@ const ok = (label, cond, extra = '') => {
   ok('similarByEmbedding ranks near above far', sim.findIndex((r) => r.id === nId) < sim.findIndex((r) => r.id === fId));
   ok('similarByEmbedding tags rows with _sim score + strips embedding blob', sim[0]?._sim > 0.9 && sim[0]?.embedding === undefined);
   ok('getSoundsByIds hydrates rows by id', db.getSoundsByIds([nId, fId]).get(nId)?.name === 'Sim Near.wav');
+  // Match-a-sample path: an external embedding (no excludeId) ranks its closest library row first.
+  const sample = similarByEmbedding(db, sidecar, Array.from(vNear), { limit: 3 });
+  ok('similarByEmbedding (external sample) ranks the matching row first', sample[0]?.id === nId);
 
   // 2e. Credits manifest — the licensing deliverable
   const { buildManifest, classifyLicense } = require('../src/credits');
