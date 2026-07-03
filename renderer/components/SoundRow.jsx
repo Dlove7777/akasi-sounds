@@ -136,50 +136,85 @@ const BADGE = { local: 'local', freesound: 'free', generate: 'gen' };
  * surface artist · genre and BPM; sfx rows surface tags and duration. The star and
  * the add-to-collection affordance are always reachable.
  */
-/** Anchored inline editor — rename/retag/reclassify without leaving the list. */
+const cleanTag = (t) => t.toLowerCase().replace(/[^\p{L}\p{N}_-]/gu, '');
+const parseTags = (raw) => String(raw || '').split(/[\s,]+/).map(cleanTag).filter(Boolean);
+
+/** Anchored inline editor — rename, custom-tag chips (additive), and reclassify. */
 function MetaEditor({ sound, onSave, onClose }) {
-  const [f, setF] = useState({
-    name: sound.name || '',
-    tags: sound.tags || '',
-    kind: sound.kind || 'sfx',
-    artist: sound.artist || '',
-    genre: sound.genre || '',
-    bpm: sound.bpm || '',
-  });
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const [name, setName] = useState(sound.name || '');
+  const [tags, setTags] = useState(() => parseTags(sound.tags));
+  const [tagInput, setTagInput] = useState('');
+  const [kind, setKind] = useState(sound.kind || 'sfx');
+  const [artist, setArtist] = useState(sound.artist || '');
+  const [genre, setGenre] = useState(sound.genre || '');
+  const [bpm, setBpm] = useState(sound.bpm || '');
+
+  const commitTags = (raw) => {
+    const parts = parseTags(raw);
+    if (parts.length) setTags((ts) => [...new Set([...ts, ...parts])]);
+    setTagInput('');
+  };
+  const removeTag = (t) => setTags((ts) => ts.filter((x) => x !== t));
+
+  const onTagKey = (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commitTags(tagInput); }
+    else if (e.key === 'Backspace' && !tagInput && tags.length) { e.preventDefault(); removeTag(tags[tags.length - 1]); }
+    else if (e.key === 'Escape') onClose();
+  };
+
   const save = () => {
+    const finalTags = [...new Set([...tags, ...parseTags(tagInput)])]; // fold a half-typed tag
     onSave({
-      name: f.name.trim() || sound.name,
-      tags: f.tags.trim(),
-      kind: f.kind,
-      artist: f.artist.trim(),
-      genre: f.genre.trim(),
-      bpm: f.bpm === '' ? '' : +f.bpm || '',
+      name: name.trim() || sound.name,
+      tags: finalTags.join(' '),
+      kind,
+      artist: artist.trim(),
+      genre: genre.trim(),
+      bpm: bpm === '' ? '' : +bpm || '',
     });
     onClose();
   };
+  // Enter/Escape from the plain text inputs; the tag input handles its own keys.
   const onKey = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save(); }
     if (e.key === 'Escape') onClose();
     e.stopPropagation();
   };
   return (
-    <div className="meta-editor" onClick={(e) => e.stopPropagation()} onKeyDown={onKey}>
-      <label>Name<input autoFocus value={f.name} onChange={set('name')} /></label>
-      <label>Tags<input value={f.tags} onChange={set('tags')} placeholder="space separated" /></label>
-      <div className="meta-row">
+    <div className="meta-editor" onClick={(e) => e.stopPropagation()}>
+      <label onKeyDown={onKey}>Name<input autoFocus value={name} onChange={(e) => setName(e.target.value)} /></label>
+      <div className="meta-tags-field">
+        <span className="meta-tags-label">Tags</span>
+        <div className="tag-chips">
+          {tags.map((t) => (
+            <span key={t} className="tag-chip">
+              {t}<button className="tag-x" title="Remove tag" onClick={() => removeTag(t)}>×</button>
+            </span>
+          ))}
+          <input
+            className="tag-input"
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={onTagKey}
+            onBlur={() => tagInput.trim() && commitTags(tagInput)}
+            placeholder={tags.length ? 'add tag…' : 'add tags — Enter or comma'}
+          />
+        </div>
+      </div>
+      <div className="meta-row" onKeyDown={onKey}>
         <label className="meta-kind">Kind
           <div className="kind-toggle">
             {['sfx', 'music'].map((k) => (
-              <button key={k} className={f.kind === k ? 'on' : ''} onClick={() => setF({ ...f, kind: k })}>{k}</button>
+              <button key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{k}</button>
             ))}
           </div>
         </label>
-        {f.kind === 'music' && (
+        {kind === 'music' && (
           <>
-            <label>Artist<input value={f.artist} onChange={set('artist')} /></label>
-            <label>Genre<input value={f.genre} onChange={set('genre')} /></label>
-            <label className="meta-bpm">BPM<input type="number" value={f.bpm} onChange={set('bpm')} /></label>
+            <label>Artist<input value={artist} onChange={(e) => setArtist(e.target.value)} /></label>
+            <label>Genre<input value={genre} onChange={(e) => setGenre(e.target.value)} /></label>
+            <label className="meta-bpm">BPM<input type="number" value={bpm} onChange={(e) => setBpm(e.target.value)} /></label>
           </>
         )}
       </div>

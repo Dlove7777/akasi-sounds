@@ -338,6 +338,25 @@ input { font-family: inherit; }
   font-family: var(--ui); text-transform: none; letter-spacing: normal;
 }
 .meta-editor input:focus { border-color: var(--accent); }
+/* Custom-tag chips */
+.meta-tags-field { display: flex; flex-direction: column; gap: 4px; }
+.meta-tags-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted-2); font-weight: 600; }
+.tag-chips {
+  display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px;
+}
+.tag-chips:focus-within { border-color: var(--accent); }
+.tag-chip {
+  display: inline-flex; align-items: center; gap: 3px; font-size: 11px;
+  background: color-mix(in srgb, var(--accent) 13%, transparent); color: var(--accent);
+  border-radius: 5px; padding: 2px 4px 2px 7px; font-family: var(--mono); white-space: nowrap;
+}
+.tag-x { background: none; border: 0; color: inherit; opacity: 0.7; font-size: 13px; line-height: 1; padding: 0 2px; cursor: pointer; }
+.tag-x:hover { opacity: 1; color: var(--accent-2); }
+.tag-input {
+  flex: 1; min-width: 80px; background: none !important; border: 0 !important; padding: 2px !important;
+  color: var(--text); font-size: 12px; outline: none; font-family: var(--ui);
+}
 .meta-row { display: flex; gap: 8px; align-items: flex-end; }
 .meta-row label { flex: 1; min-width: 0; }
 .meta-bpm { max-width: 64px; }

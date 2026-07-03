@@ -88,6 +88,14 @@ const ok = (label, cond, extra = '') => {
   ok('updateMeta: kind flip lands in Music scope', db.search('', { kind: 'music' }).some((r) => r.id === id));
   db.updateMeta(id, { kind: 'sfx', genre: '', name: 'thunder_clap.wav', tags: 'thunder storm weather' }); // restore for later tests
   ok('updateMeta: empty string clears field to NULL', db.getSound(id).genre === null);
+  // Custom-tag chips: additive add, then remove (the editor commits a joined string).
+  // Distinctive tokens (no thesaurus synonyms) so FTS reflects the literal tag set.
+  const cur = () => (db.getSound(id).tags || '').split(/\s+/).filter(Boolean);
+  db.updateMeta(id, { tags: [...new Set([...cur(), 'customtagalpha', 'customtagbeta'])].join(' ') }); // add chips
+  ok('tag chips: additive add keeps existing + adds new', db.search('customtagalpha').some((r) => r.id === id) && db.search('storm').some((r) => r.id === id));
+  db.updateMeta(id, { tags: cur().filter((t) => t !== 'customtagalpha').join(' ') }); // remove one chip
+  ok('tag chips: removing a chip drops it from FTS', db.search('customtagalpha').length === 0 && db.search('customtagbeta').some((r) => r.id === id));
+  db.updateMeta(id, { tags: 'thunder storm weather' }); // restore
 
   // 2b. Music kind + Music scope
   db.upsertMany([

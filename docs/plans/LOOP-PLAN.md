@@ -42,7 +42,7 @@ No GNU `timeout` on macOS → `perl -e 'alarm N; exec @ARGV'`.
 - `App.jsx`: searchbar button `⇪ Match sample` → pick → results + banner "≋ Similar to <basename>". Also accept an external-audio drop on the results area (nice-to-have).
 - Test: smoke — assert an identical-embedding target ranks its twin #1 (pure cosine path; CLAP not required).
 
-### [ ] 3. Manual reclassify + custom-tag chips
+### [x] 3. Manual reclassify + custom-tag chips — DONE
 - `renderer/components/SoundRow.jsx` `MetaEditor`: render `tags` as removable chips (`× ` each) + an add-input (Enter/comma commits, additive, dedupe). Keep kind toggle (reclassify), genre/bpm. Join chips → space-string on save (updateMeta already handles it). Show tags editing for BOTH sfx and music.
 - `renderer/styles.css`: `.tag-chip` styling.
 - Test: smoke — `updateMeta` additive tag round-trip (add a tag, assert FTS finds it; remove, assert it doesn't). (updateMeta already partly covered — extend.)
@@ -73,4 +73,4 @@ No GNU `timeout` on macOS → `perl -e 'alarm N; exec @ARGV'`.
 - **STOP the loop.** Do NOT build: generative Music Director (ACE-Step on VIDI), RAG knowledge-grounding, or a deeper agent swarm. Final message: summarize what shipped and recommend Dennis run **`/ce-plan`** with fresh context for that heavy phase (per handoff planning guidance).
 
 ---
-**Last iteration:** #2 Match sample — test:core 71/71, renderer build clean. `⇪ Match sample` button + OS drag-in → `sidecar.embedAudio` → cosine vs library, reuses the Find-Similar banner (file seed). `similar:pickFile`/`similar:byFile` IPC. Next: #3 manual reclassify + custom-tag chips.
+**Last iteration:** #3 Tag chips + reclassify — test:core 73/73, renderer build clean. `MetaEditor` rewritten: removable tag chips + additive input (Enter/comma/backspace, dedupe, cleaned), kind toggle reclassify, artist/genre/bpm. `updateMeta` unchanged (already whitelisted). Next: #4 research OpenRouter models (bg subagent).
